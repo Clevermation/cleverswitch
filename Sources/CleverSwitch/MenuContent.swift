@@ -5,21 +5,24 @@ import SwiftUI
 
 struct MenuContent: View {
     let model: AppModel
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         ForEach(model.providers, id: \.id) { provider in
             Section(provider.displayName) {
                 accountRows(for: provider)
                 autoSwitchMenu(for: provider)
-                if model.loginInProgress.contains(provider.id) {
+                if model.login?.providerID == provider.id {
                     Button {
-                        model.cancelLogin(for: provider)
+                        openWindow(id: CleverSwitchApp.loginWindowID)
+                        NSApp.activate(ignoringOtherApps: true)
                     } label: {
-                        Label(L10n.t("login_cancel"), systemImage: "xmark.circle")
+                        Label(L10n.t("login_show_window"), systemImage: "macwindow")
                     }
                 } else {
                     Button {
                         model.addAccount(for: provider)
+                        openWindow(id: CleverSwitchApp.loginWindowID)
                     } label: {
                         Label(L10n.t("add_account"), systemImage: "plus.circle")
                     }

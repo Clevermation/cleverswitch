@@ -14,7 +14,10 @@ final class AppModel {
     private(set) var state: PersistedState
     private(set) var usage: [String: AccountUsage] = [:]
     private(set) var statusMessage: String?
-    private(set) var loginInProgress: Set<String> = []
+    /// Aktiver Login (treibt das native Login-Fenster). nil = kein Login läuft.
+    private(set) var login: LoginUI?
+    /// Vom Eingabefeld des Login-Fensters gebundener Code.
+    var loginCode: String = ""
     // Gespeichert statt berechnet: nur gespeicherte Properties sind @Observable —
     // sonst aktualisiert sich das Häkchen im Menü nach dem Klick nicht.
     private(set) var launchAtLogin: Bool = SMAppService.mainApp.status == .enabled
@@ -27,7 +30,9 @@ final class AppModel {
     private var refreshTask: Task<Void, Never>?
     private var lastAutoSwitchAt: [String: Date] = [:]
     private var nearLimitWarned: Set<String> = []  // Frühwarnung pro Anbieter einmal pro Engpass
-    private var loginWatchTasks: [String: Task<Void, Never>] = [:]  // laufende Login-Beobachtung
+    private var pty: PTYRunner?  // laufender Login-Prozess (unter PTY, unsichtbar)
+    private var loginWatchTask: Task<Void, Never>?  // beobachtet den Login-Abschluss
+    private var loginBuffer = ""  // gesammelte CLI-Ausgabe (URL-Erkennung)
 
     private static let pollInterval: Duration = .seconds(300)
     private static let autoSwitchCooldown: TimeInterval = 60
@@ -362,36 +367,83 @@ final class AppModel {
         persist()
     }
 
-    /// Startet den offiziellen CLI-Login in einem sauberen Terminal-Tab und erkennt den Abschluss
-    /// selbst per Polling (der „Code einfügen"-Flow von Claude braucht ein sichtbares Eingabefeld).
+    /// Startet den offiziellen CLI-Login UNSICHTBAR unter einem PTY und treibt das native
+    /// Login-Fenster. Den Code aus dem Browser gibt der User ins Fenster ein (kein Terminal).
     func addAccount(for provider: AccountProvider) {
-        guard !loginInProgress.contains(provider.id) else { return }
+        guard login == nil else { return }
         guard let command = provider.loginCommand() else {
             statusMessage = L10n.t("cli_missing")
             return
         }
-
-        loginInProgress.insert(provider.id)
-        statusMessage = nil  // Anzeige läuft über den abbrechbaren Menü-Eintrag
         Log.info("login gestartet: \(provider.id)")
 
         let credentials = self.credentials
         let before = state.activeAccount(provider: provider.id)?.handle
-
-        Task {
-            // Aktiven Account sichern, BEVOR der Login den Live-Slot überschreibt (off-MainActor).
-            await Task.detached {
-                if let activeHandle = before, let live = provider.readLive(credentials: credentials) {
-                    try? credentials.write(
-                        service: provider.snapshotService(handle: activeHandle),
-                        account: activeHandle, secret: live)
-                }
-            }.value
-            TerminalLogin.open(command: command, providerName: provider.displayName)
+        // Aktiven Account sichern, BEVOR der Login den Live-Slot überschreibt.
+        if let before, let live = provider.readLive(credentials: credentials) {
+            try? credentials.write(
+                service: provider.snapshotService(handle: before), account: before, secret: live)
         }
 
-        // Auf den fertigen Login warten (neue Identität im Live-Slot) und automatisch importieren.
-        loginWatchTasks[provider.id] = Task { await watchLogin(for: provider, before: before) }
+        loginCode = ""
+        loginBuffer = ""
+        login = LoginUI(
+            providerID: provider.id, providerName: provider.displayName,
+            status: L10n.t("login_opening"))
+
+        let runner = PTYRunner()
+        pty = runner
+        let started = runner.start(command: command, extraPATH: Self.cliSearchPATH) {
+            [weak self] chunk in
+            Task { @MainActor in self?.handleLoginOutput(chunk) }
+        }
+        guard started else {
+            login = nil
+            pty = nil
+            statusMessage = L10n.t("cli_missing")
+            return
+        }
+        loginWatchTask = Task { await watchLogin(for: provider, before: before) }
+    }
+
+    private static let cliSearchPATH: [String] = {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        return ["\(home)/.local/bin", "\(home)/.bun/bin", "/opt/homebrew/bin", "/usr/local/bin"]
+    }()
+
+    /// CLI-Ausgabe verarbeiten: Browser-URL erkennen + den „Code einfügen"-Prompt erkennen.
+    private func handleLoginOutput(_ chunk: String) {
+        loginBuffer += chunk
+        guard var current = login else { return }
+        if current.browserURL == nil, let url = LoginOutputParser.authorizeURL(in: loginBuffer) {
+            current.browserURL = url
+            current.status = L10n.t("login_browser")
+        }
+        if !current.needsCode, LoginOutputParser.asksForCode(loginBuffer) {
+            current.needsCode = true
+        }
+        login = current
+    }
+
+    /// Den eingegebenen Code an die (unsichtbare) CLI durchreichen.
+    func submitLoginCode() {
+        let code = loginCode.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard var current = login, !code.isEmpty else { return }
+        pty?.send(code + "\n")
+        current.submitting = true
+        current.status = L10n.t("login_signing_in")
+        login = current
+        loginCode = ""
+    }
+
+    /// Browser-Seite (erneut) öffnen, falls die CLI das nicht selbst geschafft hat.
+    func openLoginBrowser() {
+        if let url = login?.browserURL { NSWorkspace.shared.open(url) }
+    }
+
+    func cancelLogin() {
+        Log.info("login abgebrochen: \(login?.providerID ?? "?")")
+        finishLogin(error: nil)
     }
 
     private static let loginWatchTimeout: TimeInterval = 240
@@ -408,24 +460,24 @@ final class AppModel {
                 Log.info("login erkannt: \(provider.id) \(identity.handle)")
                 await adopt(identity: identity, for: provider)
                 await refreshUsage()
-                loginInProgress.remove(provider.id)
-                loginWatchTasks[provider.id] = nil
+                finishLogin(error: nil)
                 return
             }
         }
-        // Timeout: kein neuer Login erkannt.
-        Log.info("login timeout/kein neuer Account: \(provider.id)")
-        loginInProgress.remove(provider.id)
-        loginWatchTasks[provider.id] = nil
-        statusMessage = L10n.t("login_failed")
+        Log.info("login timeout: \(provider.id)")
+        finishLogin(error: L10n.t("login_failed"))
     }
 
-    /// Bricht die Login-Beobachtung ab (das Terminal-Fenster schließt der User selbst).
-    func cancelLogin(for provider: AccountProvider) {
-        loginWatchTasks[provider.id]?.cancel()
-        loginWatchTasks[provider.id] = nil
-        loginInProgress.remove(provider.id)
-        statusMessage = nil
+    /// Räumt Login-Prozess, Beobachtung und Fenster-State auf.
+    private func finishLogin(error: String?) {
+        loginWatchTask?.cancel()
+        loginWatchTask = nil
+        pty?.terminate()
+        pty = nil
+        loginBuffer = ""
+        login = nil
+        loginCode = ""
+        if let error { statusMessage = error }
     }
 
     // MARK: - Launch at Login
