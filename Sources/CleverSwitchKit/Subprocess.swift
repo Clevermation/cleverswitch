@@ -32,8 +32,13 @@ public enum Subprocess {
             input.fileHandleForWriting.write(Data(stdin.utf8))
             try? input.fileHandleForWriting.close()
         }
+        // stderr parallel drainieren: schreibt der Prozess mehr als den Pipe-Buffer (~64 KB,
+        // z.B. zsh -ilc mit gesprächigem Nutzerprofil), würde sequentielles Lesen deadlocken.
+        nonisolated(unsafe) var errData = Data()
+        let errQueue = DispatchQueue(label: "cleverswitch.subprocess.stderr")
+        errQueue.async { errData = err.fileHandleForReading.readDataToEndOfFile() }
         let outData = out.fileHandleForReading.readDataToEndOfFile()
-        let errData = err.fileHandleForReading.readDataToEndOfFile()
+        errQueue.sync {}
         process.waitUntilExit()
         return Result(
             status: process.terminationStatus,

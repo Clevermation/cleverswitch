@@ -50,7 +50,9 @@ struct MenuContent: View {
         if !model.removableAccounts.isEmpty {
             Menu {
                 ForEach(model.removableAccounts, id: \.id) { account in
-                    Button("\(account.provider): \(model.displayHandle(account.handle))") {
+                    // Anzeigename statt roher Provider-ID ("Claude Code" statt "claude").
+                    let providerName = model.provider(account.provider)?.displayName ?? account.provider
+                    Button("\(providerName): \(model.displayHandle(account.handle))") {
                         model.remove(account)
                     }
                 }
@@ -79,6 +81,9 @@ struct MenuContent: View {
         let raw = model.accounts(for: provider)
         // Aktiver Account immer zuerst (stabil, ohne die übrige Reihenfolge zu verwürfeln).
         let accounts = raw.filter(\.active) + raw.filter { !$0.active }
+        // Abo-Spalte so breit wie das längste Label dieses Anbieters (min. 4), sonst bricht
+        // die Ausrichtung sobald ein Plan-Name länger als 4 Zeichen ist (z.B. "Team").
+        let labelWidth = max(4, accounts.map(\.label.count).max() ?? 4)
         if accounts.isEmpty {
             Label(L10n.t("no_accounts"), systemImage: "person.crop.circle.badge.questionmark")
         } else {
@@ -93,7 +98,7 @@ struct MenuContent: View {
                 }
                 // Plan + Usage in zweiter Zeile, monospaced -> Spalten (Abo · Session · Woche)
                 // richten sich über alle Accounts hinweg sauber aus.
-                usageLine(for: account)
+                usageLine(for: account, labelWidth: labelWidth)
                     .font(.system(.callout, design: .monospaced))
             }
         }
@@ -102,7 +107,7 @@ struct MenuContent: View {
     /// Zweite Zeile pro Account: Plan + Usage in festen Spaltenbreiten (monospaced gesetzt in
     /// `accountRows`), damit Abo · Session · Woche über alle Accounts hinweg untereinander stehen.
     /// Die Prozent-Zahl ist je nach Auslastung eingefärbt (grün < 60 %, orange < 85 %, rot darüber).
-    private func usageLine(for account: Account) -> Text {
+    private func usageLine(for account: Account, labelWidth: Int) -> Text {
         func color(_ pct: Double) -> Color { pct >= 85 ? .red : (pct >= 60 ? .orange : .green) }
         // Rechts-/linksbündig auf feste Zeichenbreite auffüllen (wirkt nur monospaced sauber).
         func pad(_ s: String, _ n: Int, right: Bool = false) -> String {
@@ -114,8 +119,8 @@ struct MenuContent: View {
             let provider = model.provider(account.provider)
         else { return dash }
 
-        // Abo-Label linksbündig, feste Breite (z.B. "max ", "pro ").
-        var line = Text(pad(account.label, 4)).foregroundStyle(.secondary)
+        // Abo-Label linksbündig, Breite = längstes Label des Anbieters (z.B. "max ", "pro ").
+        var line = Text(pad(account.label, labelWidth)).foregroundStyle(.secondary)
         var any = false
         for (key, label) in [
             (UsageWindowKey.session, provider.sessionWindowLabel),

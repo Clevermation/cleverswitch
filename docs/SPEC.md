@@ -27,7 +27,8 @@ verwalteten Account eine Kopie der Credentials in einem eigenen, klar benannten 
 - Beim Hinzufügen eines Accounts darf der zuvor aktive Account **nicht serverseitig abgemeldet**
   werden (nur lokaler Live-Slot wird aufgeräumt) — sonst wird dessen gespeicherte Sitzung ungültig.
 - Der CLI-Login läuft **unsichtbar im Hintergrund** (kein Terminal-Fenster): der Login-Prozess wird
-  headless mit Pseudo-TTY gestartet, der Browser öffnet sich von selbst, der Prozess schließt den
+  als normaler Subprozess ohne TTY gestartet (`stdin = /dev/null` — die CLI pollt dann, statt auf
+  Eingabe zu blockieren), der Browser öffnet sich von selbst, der Prozess schließt den
   Flow ohne weitere Eingabe ab. Nach erfolgreichem Login wird der neue Account **automatisch
   importiert und aktiv gesetzt** (kein manueller Folgeschritt).
 - Beim App-Start wird der Live-Slot mit der Account-Liste **abgeglichen** (Reconcile): ist im
@@ -79,9 +80,10 @@ Pro Anbieter drei Modi:
 - Kein Server, kein Team-Dashboard.
 
 ## Plattform / Stack
-- macOS, Python ≥ 3.13, Menüleiste via `rumps`, Paketierung via `py2app`, Tooling via `uv`.
-- HTTP über stdlib (`urllib`); Keychain über das macOS-`security`-CLI.
-- Einzige Laufzeit-Abhängigkeit: `rumps` (+ dessen `pyobjc`).
+- macOS 14+, Swift 6, SwiftUI `MenuBarExtra`; Build über SwiftPM (kein Xcode-Projekt),
+  Paketierung über `packaging/assemble-app.sh` (LSUIElement-Bundle, ad-hoc signiert).
+- HTTP über `URLSession`; Keychain über das macOS-`security`-CLI (Subprozess).
+- Keine externen Laufzeit-Abhängigkeiten.
 
 ## Provider-Abstraktion
 Anbieter-spezifisches Verhalten (wo liegen Credentials, wie sieht der Token-Blob aus, welche

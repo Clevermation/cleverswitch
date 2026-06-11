@@ -56,6 +56,20 @@ public final class LoginProcess: @unchecked Sendable {
     }
 
     public func cancel() {
-        if process.isRunning { process.terminate() }
+        guard process.isRunning else { return }
+        // Kompletten Prozessbaum beenden: die Login-CLIs sind bun/node-Wrapper, die Kinder
+        // spawnen — nur terminate() auf den Wurzelprozess liesse die weiterlaufen.
+        Self.terminateTree(process.processIdentifier)
+    }
+
+    /// SIGTERM an `pid` und rekursiv an alle Nachfahren (Kinder zuerst).
+    private static func terminateTree(_ pid: Int32) {
+        let children = Subprocess.run("/usr/bin/pgrep", ["-P", "\(pid)"])
+        for line in children.stdout.split(separator: "\n") {
+            if let child = Int32(line.trimmingCharacters(in: .whitespaces)) {
+                terminateTree(child)
+            }
+        }
+        kill(pid, SIGTERM)
     }
 }

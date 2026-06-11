@@ -7,7 +7,7 @@ import Testing
 struct ValidationTests {
     @Test("normale E-Mails sind gültig")
     func validEmails() {
-        #expect(AccountHandle.isValid("theo@clevermation.com"))
+        #expect(AccountHandle.isValid("anna@example.com"))
         #expect(AccountHandle.isValid("a.b+c@x.io"))
     }
 
@@ -21,8 +21,8 @@ struct ValidationTests {
 
     @Test("E-Mail-Maskierung leakt die Adresse nicht, bleibt aber unterscheidbar")
     func emailMasking() {
-        #expect(AccountHandle.masked("theo@clevermation.com") == "t•••@c•••.com")
-        #expect(AccountHandle.masked("paul@goclevermation.com") == "p•••@g•••.com")
+        #expect(AccountHandle.masked("anna@example.com") == "a•••@e•••.com")
+        #expect(AccountHandle.masked("max@firma-beispiel.de") == "m•••@f•••.de")
         #expect(AccountHandle.masked("a@b.io") == "a•••@b•••.io")
         // kein @ -> nur erstes Zeichen
         #expect(AccountHandle.masked("weird") == "w•••")

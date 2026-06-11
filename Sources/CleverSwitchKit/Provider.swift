@@ -160,7 +160,9 @@ public struct ClaudeProvider: AccountProvider {
         for _ in 0..<10 {
             guard let secret = credentials.read(service: liveCredentialService) else { break }
             let account = credentials.readAccount(service: liveCredentialService) ?? "unknown"
-            entries.append((account, secret, ClaudeAuth.expiresAtMillis(in: secret) ?? 0))
+            // Blobs ohne Zeitstempel ans Ende der Auswahl (-1) statt mit 0 gleichauf —
+            // sonst entscheidet die zufällige Lesereihenfolge.
+            entries.append((account, secret, ClaudeAuth.expiresAtMillis(in: secret) ?? -1))
             credentials.delete(service: liveCredentialService)
         }
         guard let freshest = entries.max(by: { $0.expiresAt < $1.expiresAt }) else { return }
@@ -200,15 +202,16 @@ public struct ClaudeProvider: AccountProvider {
         return [claude, "auth", "login"]
     }
 
-    static func findExecutable(_ name: String) -> String? {
+    /// Bekannte CLI-Installationsorte (claude-Installer, bun, Homebrew) — eine Quelle,
+    /// genutzt von findExecutable UND als extraPATH für den Login-Subprozess.
+    public static let cliSearchPaths: [String] = {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
-        // 1. Bekannte Installationsorte (claude-Installer, bun, Homebrew).
-        let candidates = [
-            "\(home)/.local/bin/\(name)",
-            "\(home)/.bun/bin/\(name)",
-            "/opt/homebrew/bin/\(name)",
-            "/usr/local/bin/\(name)",
-        ]
+        return ["\(home)/.local/bin", "\(home)/.bun/bin", "/opt/homebrew/bin", "/usr/local/bin"]
+    }()
+
+    static func findExecutable(_ name: String) -> String? {
+        // 1. Bekannte Installationsorte.
+        let candidates = cliSearchPaths.map { "\($0)/\(name)" }
         if let direct = candidates.first(where: { FileManager.default.isExecutableFile(atPath: $0) }) {
             return direct
         }

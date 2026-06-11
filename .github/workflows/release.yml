@@ -33,11 +33,13 @@ jobs:
         run: |
           cd dist
           ditto -c -k --keepParent "CleverSwitch.app" "CleverSwitch-${{ steps.version.outputs.version }}.zip"
-          echo "SHA256:"
-          shasum -a 256 *.zip
+          # SHA256 als Datei mitliefern (für den Homebrew-Cask, statt Abschreiben aus dem CI-Log)
+          shasum -a 256 *.zip | tee SHA256SUMS.txt
 
       - name: GitHub-Release anlegen
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/*.zip
+          files: |
+            dist/*.zip
+            dist/SHA256SUMS.txt
           generate_release_notes: true

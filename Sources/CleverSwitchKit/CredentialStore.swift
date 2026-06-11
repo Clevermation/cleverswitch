@@ -1,5 +1,7 @@
 // Abstraktion über den Credential-Speicher, damit die Switch-Orchestrierung ohne echtes
-// Keychain testbar ist. Produktiv: `KeychainCredentialStore`; in Tests: ein In-Memory-Fake.
+// Keychain testbar ist. Produktiv: `SecurityCLICredentialStore` (keine Erlaubnis-Dialoge
+// nach ad-hoc-Rebuilds); `KeychainCredentialStore` bleibt als SecItem-Alternative erhalten,
+// falls die App später notarisiert/stabil signiert wird. In Tests: ein In-Memory-Fake.
 
 import Foundation
 import Security
@@ -52,10 +54,15 @@ public struct SecurityCLICredentialStore: CredentialStore {
     public func readAccount(service: String) -> String? {
         let result = Subprocess.run(Self.securityPath, ["find-generic-password", "-s", service])
         guard result.status == 0 else { return nil }
-        // Zeile der Form: "acct"<blob>="<wert>"
+        // Zeile der Form: "acct"<blob>="<wert>" — explizit bis zum letzten schließenden
+        // Anführungszeichen lesen statt blind dropLast() (sonst wird der Handle bei
+        // abweichendem security-Output still um ein Zeichen gekürzt).
         for line in result.stdout.split(separator: "\n") where line.contains("\"acct\"<blob>=") {
-            if let range = line.range(of: "=\"") {
-                return String(line[range.upperBound...].dropLast())
+            if let open = line.range(of: "=\"") {
+                let rest = line[open.upperBound...]
+                if let close = rest.lastIndex(of: "\"") {
+                    return String(rest[..<close])
+                }
             }
         }
         return nil

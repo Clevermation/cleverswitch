@@ -43,7 +43,7 @@ session **automatically before the wall** — so you never get interrupted.
 ## Features
 
 - **🔀 One-click switch** between multiple Claude Code and Codex accounts — swaps the OAuth token the CLI reads, no re-login.
-- **📊 Live usage** per account: each provider's session window + weekly window, in %, with a *resets-in* countdown. The menu bar shows the highest session usage across your active accounts at a glance.
+- **📊 Live usage** per account: each provider's session window + weekly window, in %, color-coded by load, with a *resets-in* countdown. The menu bar shows the highest session usage at a glance — scoped to all accounts or one provider, your choice.
 - **🤖 Auto-switch**, three modes:
 
   | Mode | What it does |
@@ -55,7 +55,7 @@ session **automatically before the wall** — so you never get interrupted.
 - **🔑 Automatic token refresh** — expired tokens are renewed on the fly; switching never leaves you logged out.
 - **🔒 Privacy-first** — credentials stay in the macOS Keychain / the CLI's own file; the account list holds no secrets. Hide email addresses in one click (great for screen recordings & streams): `you@company.com` → `y•••@c•••.com`.
 - **🌍 16 languages**, automatically following your system language.
-- **⚙️ Settings**: start at login · notifications · show/hide emails.
+- **⚙️ Settings**: start at login · notifications · show/hide emails · menu bar number source.
 
 ## How it works
 

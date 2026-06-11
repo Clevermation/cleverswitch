@@ -12,7 +12,7 @@ public enum UsageResult: Sendable {
 
 public enum ClaudeUsageAPI {
     public static let usageURL = URL(string: "https://api.anthropic.com/oauth/usage")!
-    public static let userAgent = "claude-code/2.1.11"
+    public static let userAgent = ClaudeAuth.userAgent  // eine UA-Quelle für alle Claude-Endpoints
 
     /// Mappt die Usage-Response auf AccountUsage (five_hour->session, seven_day->weekly).
     public static func mapUsage(responseBody: Data) -> AccountUsage? {
@@ -109,8 +109,12 @@ public enum CodexUsageAPI {
                 if let usage = mapUsage(responseBody: response.body) {
                     return (.ok(usage), planType(responseBody: response.body))
                 }
-            case 401, 403:
+            case 401:
                 sawUnauthorized = true
+            case 403:
+                // Kein Codex-Zugang (Plan), nicht "Token abgelaufen" -> kein Refresh-Versuch,
+                // sonst hämmert jeder Poll auf den Token-Endpoint und hält das Rate-Limit am Leben.
+                continue
             default:
                 continue
             }

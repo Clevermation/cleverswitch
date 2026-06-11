@@ -22,10 +22,11 @@ enum Log {
                 handle.write(Data(line.utf8))
                 try? handle.close()
             } else {
-                try? Data(line.utf8).write(to: url)
-                // Log enthält E-Mail-Adressen (PII) -> nicht world-readable lassen.
-                try? FileManager.default.setAttributes(
-                    [.posixPermissions: 0o600], ofItemAtPath: url.path)
+                // Log enthält E-Mail-Adressen (PII) -> Datei direkt mit 0600 anlegen
+                // (kein Race-Window zwischen Schreiben und nachträglichem chmod).
+                FileManager.default.createFile(
+                    atPath: url.path, contents: Data(line.utf8),
+                    attributes: [.posixPermissions: 0o600])
             }
         }
     }

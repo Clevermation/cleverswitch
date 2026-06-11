@@ -5,7 +5,9 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APP="$ROOT/dist/CleverSwitch.app"
-VERSION="${1:-0.1.3}"
+# Version aus Version.swift lesen (Single Source of Truth), überschreibbar per Argument.
+DEFAULT_VERSION="$(sed -n 's/.*cleverSwitchVersion = "\(.*\)"/\1/p' "$ROOT/Sources/CleverSwitchKit/Version.swift")"
+VERSION="${1:-$DEFAULT_VERSION}"
 
 echo "==> swift build -c release"
 swift build -c release --package-path "$ROOT"

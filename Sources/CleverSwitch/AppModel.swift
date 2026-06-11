@@ -64,6 +64,13 @@ final class AppModel {
             await self.refreshUsage()
         }
         startPolling()
+        // Minuten-Tick für die relative „Aktualisiert vor X"-Zeile.
+        Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(60))
+                self?.clockTick = Date()
+            }
+        }
     }
 
     // MARK: - Lookups fürs Menü
@@ -74,31 +81,15 @@ final class AppModel {
 
     var removableAccounts: [Account] { state.accounts.filter { !$0.active } }
 
-    /// Usage-Kurztext für die Menüzeile, z.B. "5h 21% (4h 49m) · 7d 45% (5d 20h)".
-    func usageText(for account: Account) -> String {
-        guard let snapshot = usage[account.id], snapshot.known,
-            let provider = provider(account.provider)
-        else { return L10n.t("usage_unknown") }
-        var parts: [String] = []
-        for (key, label) in [
-            (UsageWindowKey.session, provider.sessionWindowLabel),
-            (UsageWindowKey.weekly, provider.weeklyWindowLabel),
-        ] {
-            guard let pct = snapshot.pct(key) else { continue }
-            let resetsAt = snapshot.windows.first { $0.key == key }?.resetsAt
-            let countdown = ResetFormatter.shortCountdown(from: resetsAt).map { " (\($0))" } ?? ""
-            parts.append("\(label) \(Int(pct))%\(countdown)")
-        }
-        return parts.isEmpty ? L10n.t("usage_unknown") : parts.joined(separator: " · ")
-    }
-
-
     /// Kompakter Text neben dem Menüleisten-Icon: höchste Session-Auslastung. Welche Accounts
     /// einbezogen werden, steuert `menuBarSource` ("highest" = alle aktiven, sonst nur ein Anbieter).
     var menuBarText: String? {
         let source = state.settings.menuBarSource
         let active = state.accounts.filter(\.active)
-        let scoped = source == "highest" ? active : active.filter { $0.provider == source }
+        // Liefert die Quelle nichts (Anbieter ohne aktiven Account, veralteter Wert in
+        // state.json), auf alle aktiven zurückfallen statt still gar nichts anzuzeigen.
+        var scoped = source == "highest" ? active : active.filter { $0.provider == source }
+        if scoped.isEmpty { scoped = active }
         let sessions = scoped.compactMap { usage[$0.id]?.pct(UsageWindowKey.session) }
         guard let worst = sessions.max() else { return nil }
         return "\(Int(worst))%"
@@ -112,8 +103,12 @@ final class AppModel {
 
     /// Zeitpunkt des letzten erfolgreichen Usage-Abrufs (für die „zuletzt aktualisiert"-Zeile).
     private(set) var lastRefreshAt: Date?
+    /// Minuten-Tick: @Observable trackt kein Date() — ohne gespeicherte, tickende Abhängigkeit
+    /// friert die relative Anzeige zwischen zwei Polls auf dem alten Wert ein.
+    private(set) var clockTick = Date()
     /// Relative „vor X" Anzeige. Wird bei jedem Menü-Öffnen frisch berechnet.
     var lastUpdatedText: String? {
+        _ = clockTick  // Abhängigkeit registrieren (invalidiert die Zeile pro Minute)
         guard let at = lastRefreshAt else { return nil }
         let secs = Int(Date().timeIntervalSince(at))
         if secs < 60 { return L10n.t("updated_just_now") }
@@ -173,7 +168,9 @@ final class AppModel {
 
     /// Öffnet den Benachrichtigungs-Bereich der Systemeinstellungen.
     private func openNotificationSettings() {
-        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.notifications") {
+        // Seit macOS 13 heißt das Pane so — die alte preference.notifications-URL landet
+        // nur noch auf der Startseite der Systemeinstellungen.
+        if let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension") {
             NSWorkspace.shared.open(url)
         }
     }
@@ -293,7 +290,9 @@ final class AppModel {
                 }.value
 
                 // Direkt in `usage` schreiben (kein Sammel-Snapshot): parallele Mutationen
-                // wie remove() gehen sonst zwischen den await-Punkten verloren.
+                // wie remove() gehen sonst zwischen den await-Punkten verloren. Wurde der
+                // Account WÄHREND des Fetch entfernt, keinen stalen Eintrag wieder anlegen.
+                guard state.accounts.contains(where: { $0.id == account.id }) else { continue }
                 usage[account.id] = outcome?.usage ?? .unknown
                 if let plan = outcome?.planLabel, !plan.isEmpty, plan != account.label {
                     labelUpdates.append((account.provider, account.handle, plan))
@@ -446,10 +445,8 @@ final class AppModel {
         persist()
     }
 
-    private static let cliSearchPATH: [String] = {
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
-        return ["\(home)/.local/bin", "\(home)/.bun/bin", "/opt/homebrew/bin", "/usr/local/bin"]
-    }()
+    // Gemeinsame CLI-Pfadliste aus dem Kit (eine Quelle, auch von findExecutable genutzt).
+    private static let cliSearchPATH = ClaudeProvider.cliSearchPaths
 
     /// Startet den offiziellen CLI-Login als normalen Subprozess (KEIN Terminal, KEIN Fenster):
     /// Die CLI öffnet den Browser selbst und schließt per Hintergrund-Poll automatisch ab. Den
@@ -472,7 +469,14 @@ final class AppModel {
 
         let process = LoginProcess()
         let started = process.start(command: command, extraPATH: Self.cliSearchPATH) { chunk in
-            Log.info("login-cli: \(chunk.trimmingCharacters(in: .whitespacesAndNewlines).prefix(120))")
+            // Keine URLs loggen: die Login-CLI gibt OAuth-Redirect-URLs aus (state/code-Parameter)
+            // — die gehören nicht persistiert ins Log.
+            let safe = chunk
+                .split(separator: "\n")
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty && !$0.contains("://") }
+                .joined(separator: " ")
+            if !safe.isEmpty { Log.info("login-cli: \(safe.prefix(120))") }
         }
         guard started else {
             statusMessage = L10n.t("cli_missing")
@@ -504,6 +508,9 @@ final class AppModel {
             try? await Task.sleep(for: Self.loginPollInterval)
             if Task.isCancelled { return }
             let identity = await Task.detached { provider.currentIdentity(credentials: credentials) }.value
+            // Cancel (User-Abbruch) kann während des detached-Awaits passieren — danach nichts
+            // mehr adoptieren, sonst importiert ein abgebrochener Login trotzdem einen Account.
+            if Task.isCancelled { return }
             if let identity, identity.handle != before {
                 Log.info("login erkannt: \(provider.id) \(identity.handle)")
                 // Der Login hat einen frischen Token-Eintrag angelegt — Duplikate bereinigen,
