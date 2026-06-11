@@ -1,0 +1,18 @@
+# Swift / SwiftPM
+.build/
+.swiftpm/
+DerivedData/
+*.xcodeproj
+
+# macOS
+.DS_Store
+
+# Build-Artefakte
+*.app
+dist/
+
+# Lokale Geheimnisse / Account-Daten (niemals committen)
+*.local
+secrets/
+state.json
+*.log

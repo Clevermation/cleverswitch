@@ -1,0 +1,17 @@
+CleverSwitch
+Copyright (c) 2026 Jonne Schwegmann / Clevermation
+
+This is an independent, clean-room implementation. It was written from a
+behavioural specification (see docs/SPEC.md) describing the desired
+functionality of a macOS menu-bar account switcher for AI coding CLIs. No
+third-party source code was copied, decompiled, or translated into this
+project.
+
+The functionality (switching between multiple CLI accounts, OAuth token
+refresh, macOS Keychain access, a SwiftUI menu-bar UI) is implemented using
+standard, publicly documented APIs and idioms. Module structure, naming, UI
+strings, configuration format and the auto-switch policy are this project's own
+design.
+
+Built with Swift and Apple's SwiftUI / AppKit frameworks. No third-party
+runtime dependencies.
