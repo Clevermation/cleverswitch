@@ -33,6 +33,8 @@ final class AppModel {
     private var pty: PTYRunner?  // laufender Login-Prozess (unter PTY, unsichtbar)
     private var loginWatchTask: Task<Void, Never>?  // beobachtet den Login-Abschluss
     private var loginBuffer = ""  // gesammelte CLI-Ausgabe (URL-Erkennung)
+    private var refreshBackoffUntil: [String: Date] = [:]  // Account-ID -> kein Refresh vor diesem Zeitpunkt
+    private static let refreshBackoff: TimeInterval = 900  // 15 Min Pause nach gescheitertem Refresh
 
     private static let pollInterval: Duration = .seconds(300)
     private static let autoSwitchCooldown: TimeInterval = 60
@@ -209,6 +211,10 @@ final class AppModel {
                 // die ganze Beschaffung läuft detached, nur die Mutationen bleiben hier.
                 let credentials = self.credentials
                 let http = self.http
+                // Refresh nur erlauben, wenn dieser Account nicht im Backoff steckt. Sonst würde
+                // ein abgelaufener Token bei JEDEM Poll erneut einen (rate-limitierten) Refresh
+                // auslösen — und das Rate-Limit damit dauerhaft am Leben halten.
+                let allowRefresh = (refreshBackoffUntil[account.id].map { $0 <= Date() } ?? true)
                 let outcome: UsageOutcome? = await Task.detached {
                     let snapshotService = provider.snapshotService(handle: account.handle)
                     let blob =
@@ -216,7 +222,8 @@ final class AppModel {
                         ? provider.readLive(credentials: credentials)
                         : credentials.read(service: snapshotService)
                     guard let blob else { return nil }
-                    let outcome = await provider.fetchUsage(blob: blob, http: http)
+                    let outcome = await provider.fetchUsage(
+                        blob: blob, http: http, allowRefresh: allowRefresh)
                     if let refreshed = outcome.refreshedBlob {
                         if account.active {
                             try? provider.writeLive(
@@ -234,6 +241,13 @@ final class AppModel {
                 usage[account.id] = outcome?.usage ?? .unknown
                 if let plan = outcome?.planLabel, !plan.isEmpty, plan != account.label {
                     labelUpdates.append((account.provider, account.handle, plan))
+                }
+                // Backoff steuern: gescheiterter Refresh -> Pause; Erfolg -> Pause löschen.
+                if outcome?.refreshFailed == true {
+                    refreshBackoffUntil[account.id] = Date().addingTimeInterval(Self.refreshBackoff)
+                    Log.info("usage refresh backoff (\(Int(Self.refreshBackoff / 60))min): \(account.id)")
+                } else if outcome?.usage.known == true {
+                    refreshBackoffUntil[account.id] = nil
                 }
             }
         }
@@ -254,6 +268,13 @@ final class AppModel {
     private func performRefresh(allowAutoSwitch: Bool) async {
         await fetchAllUsage()
         if allowAutoSwitch { await evaluateAutoSwitch() }
+    }
+
+    /// Manuelles „Usage aktualisieren": setzt den Refresh-Backoff zurück und holt sofort neu —
+    /// der User will JETZT eine Antwort, nicht erst nach Ablauf der Backoff-Pause.
+    func forceRefresh() {
+        refreshBackoffUntil.removeAll()
+        Task { await refreshUsage() }
     }
 
     private func startPolling() {

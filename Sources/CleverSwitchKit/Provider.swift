@@ -14,11 +14,18 @@ public struct UsageOutcome: Sendable {
     public let refreshedBlob: String?
     /// Live-Plan-Bezeichnung laut Server (verlässlicher als gecachte Token-Claims).
     public let planLabel: String?
+    /// Ein nötiger Refresh ist gescheitert (429/Netzwerk/tot) → Aufrufer soll BACKOFF setzen,
+    /// damit nicht bei jedem Poll erneut gehämmert wird (das hält das Rate-Limit am Leben).
+    public let refreshFailed: Bool
 
-    public init(usage: AccountUsage, refreshedBlob: String? = nil, planLabel: String? = nil) {
+    public init(
+        usage: AccountUsage, refreshedBlob: String? = nil, planLabel: String? = nil,
+        refreshFailed: Bool = false
+    ) {
         self.usage = usage
         self.refreshedBlob = refreshedBlob
         self.planLabel = planLabel
+        self.refreshFailed = refreshFailed
     }
 }
 
@@ -57,8 +64,9 @@ public protocol AccountProvider: Sendable {
     func isExpired(_ blob: String) -> Bool
     /// Erneuert den Token via Refresh-Token. Wirft `CredentialsExpiredError` bei totem Token.
     func refresh(_ blob: String, http: HTTPClient) async throws -> String
-    /// Holt Usage für einen Blob; erneuert bei 401 einmal (refreshedBlob zurückspeichern).
-    func fetchUsage(blob: String, http: HTTPClient) async -> UsageOutcome
+    /// Holt Usage für einen Blob. Bei 401 wird — NUR wenn `allowRefresh` — einmal erneuert
+    /// (refreshedBlob zurückspeichern). Scheitert der Refresh, ist `refreshFailed` gesetzt.
+    func fetchUsage(blob: String, http: HTTPClient, allowRefresh: Bool) async -> UsageOutcome
 
     /// Identität des aktuell im Live-Slot eingeloggten Accounts (für Import), oder nil.
     func currentIdentity(credentials: CredentialStore) -> AccountIdentity?
@@ -106,7 +114,7 @@ public struct ClaudeProvider: AccountProvider {
         try await ClaudeAuth.refresh(blob, http: http)
     }
 
-    public func fetchUsage(blob: String, http: HTTPClient) async -> UsageOutcome {
+    public func fetchUsage(blob: String, http: HTTPClient, allowRefresh: Bool) async -> UsageOutcome {
         guard let token = ClaudeAuth.accessToken(in: blob) else { return UsageOutcome(usage: .unknown) }
         let label = ClaudeAuth.subscriptionType(in: blob)
 
@@ -117,10 +125,18 @@ public struct ClaudeProvider: AccountProvider {
         case .failed:
             return UsageOutcome(usage: .unknown)
         case .unauthorized:
-            // Token vor Ablauf widerrufen -> einmal erneuern und erneut abrufen.
-            guard let refreshed = try? await refresh(blob, http: http),
-                let freshToken = ClaudeAuth.accessToken(in: refreshed)
-            else { return UsageOutcome(usage: .unknown) }
+            // Token abgelaufen/widerrufen. Nur refreshen, wenn erlaubt (sonst Backoff aktiv).
+            guard allowRefresh else { return UsageOutcome(usage: .unknown) }
+            let refreshed: String
+            do {
+                refreshed = try await refresh(blob, http: http)
+            } catch {
+                // 429/Netzwerk/tot -> Backoff signalisieren, NICHT bei jedem Poll neu hämmern.
+                return UsageOutcome(usage: .unknown, refreshFailed: true)
+            }
+            guard let freshToken = ClaudeAuth.accessToken(in: refreshed) else {
+                return UsageOutcome(usage: .unknown, refreshedBlob: refreshed)
+            }
             let second = (try? await ClaudeUsageAPI.fetch(accessToken: freshToken, http: http)) ?? .failed
             if case .ok(let usage) = second {
                 return UsageOutcome(
@@ -233,7 +249,7 @@ public struct CodexProvider: AccountProvider {
         try await CodexAuth.refresh(blob, http: http)
     }
 
-    public func fetchUsage(blob: String, http: HTTPClient) async -> UsageOutcome {
+    public func fetchUsage(blob: String, http: HTTPClient, allowRefresh: Bool) async -> UsageOutcome {
         guard let token = CodexAuth.accessToken(in: blob), let accountID = CodexAuth.accountID(in: blob)
         else { return UsageOutcome(usage: .unknown) }
 
@@ -246,10 +262,16 @@ public struct CodexProvider: AccountProvider {
         case .failed:
             return UsageOutcome(usage: .unknown)
         case .unauthorized:
-            guard let refreshed = try? await refresh(blob, http: http),
-                let freshToken = CodexAuth.accessToken(in: refreshed),
+            guard allowRefresh else { return UsageOutcome(usage: .unknown) }
+            let refreshed: String
+            do {
+                refreshed = try await refresh(blob, http: http)
+            } catch {
+                return UsageOutcome(usage: .unknown, refreshFailed: true)
+            }
+            guard let freshToken = CodexAuth.accessToken(in: refreshed),
                 let freshAccount = CodexAuth.accountID(in: refreshed)
-            else { return UsageOutcome(usage: .unknown) }
+            else { return UsageOutcome(usage: .unknown, refreshedBlob: refreshed) }
             let second =
                 (try? await CodexUsageAPI.fetch(
                     accessToken: freshToken, accountID: freshAccount, http: http))

@@ -33,7 +33,7 @@ struct MenuContent: View {
         Divider()
 
         Button {
-            Task { await model.refreshUsage() }
+            model.forceRefresh()
         } label: {
             Label(L10n.t("refresh_usage"), systemImage: "arrow.clockwise")
         }
