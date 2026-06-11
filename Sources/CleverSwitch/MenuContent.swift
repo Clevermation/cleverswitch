@@ -72,12 +72,15 @@ struct MenuContent: View {
                 Button {
                     Task { await model.switchTo(account) }
                 } label: {
-                    let plan = account.label.isEmpty ? "" : " (\(account.label))"
                     Label(
-                        "\(model.displayHandle(account.handle))\(plan)  —  \(model.usageText(for: account))",
+                        model.displayHandle(account.handle),
                         systemImage: account.active ? "checkmark.circle.fill" : "circle"
                     )
                 }
+                // Plan + Usage eingerückt in zweiter Zeile -> bei ALLEN Accounts gleicher
+                // Abstand von links, unabhängig von der E-Mail-Länge (symmetrisch).
+                let plan = account.label.isEmpty ? "" : "\(account.label) · "
+                Text("       \(plan)\(model.usageText(for: account))")
             }
         }
     }

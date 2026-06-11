@@ -419,7 +419,12 @@ final class AppModel {
         }
         loginProcesses[provider.id] = process
         loginInProgress.insert(provider.id)
-        statusMessage = nil  // Anzeige läuft über die abbrechbare Menüzeile
+        // Klarer Hinweis: der Browser öffnet sich – dort muss der User autorisieren. Ohne das
+        // bleibt der Login hängen (der häufigste Stolperstein beim fensterlosen Flow).
+        statusMessage = L10n.t("login_browser_hint")
+        Notifier.post(
+            L10n.t("login_title", provider.displayName), L10n.t("login_browser_hint"),
+            enabled: notificationsEnabled)
         loginWatchTasks[provider.id] = Task { await watchLogin(for: provider, before: before) }
     }
 
