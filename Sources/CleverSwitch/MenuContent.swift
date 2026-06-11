@@ -131,7 +131,7 @@ struct MenuContent: View {
                 L10n.t("launch_at_login"), isOn: model.launchAtLogin,
                 action: { model.setLaunchAtLogin(!model.launchAtLogin) })
             toggle(
-                L10n.t("notifications"), isOn: model.notificationsEnabled,
+                L10n.t("notifications"), isOn: model.notificationsActive,
                 action: { model.setNotificationsEnabled(!model.notificationsEnabled) })
             toggle(
                 L10n.t("show_email"), isOn: model.showEmail,
@@ -158,7 +158,8 @@ struct MenuContent: View {
                 } label: {
                     Label(
                         L10n.t("mode_\(mode.rawValue)"),
-                        systemImage: current == mode ? "checkmark" : "circle.dotted"
+                        // Gleiche Icon-Sprache wie Accounts + Einstellungen (Konsistenz).
+                        systemImage: current == mode ? "checkmark.circle.fill" : "circle"
                     )
                 }
             }

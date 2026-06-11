@@ -6,8 +6,21 @@ import UserNotifications
 
 enum Notifier {
     /// Fragt die Benachrichtigungs-Berechtigung an (beim Einschalten in den Einstellungen).
-    static func requestAuthorization() {
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+    /// `completion` liefert, ob die Berechtigung erteilt wurde — false auch dann, wenn sie zuvor
+    /// abgelehnt wurde (macOS zeigt dann keinen Dialog mehr).
+    static func requestAuthorization(_ completion: @escaping @Sendable (Bool) -> Void = { _ in }) {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) {
+            granted, _ in completion(granted)
+        }
+    }
+
+    /// Liest den tatsächlichen System-Berechtigungsstatus (für „wurde in den Systemeinstellungen
+    /// entzogen?"). true bei authorized/provisional.
+    static func authorizationStatus(_ completion: @escaping @Sendable (Bool) -> Void) {
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            let status = settings.authorizationStatus
+            completion(status == .authorized || status == .provisional)
+        }
     }
 
     /// Postet eine Benachrichtigung, sofern `enabled`. Fehlende Berechtigung wird still ignoriert

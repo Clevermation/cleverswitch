@@ -19,6 +19,10 @@ final class AppModel {
     // Gespeichert statt berechnet: nur gespeicherte Properties sind @Observable —
     // sonst aktualisiert sich das Häkchen im Menü nach dem Klick nicht.
     private(set) var launchAtLogin: Bool = SMAppService.mainApp.status == .enabled
+    /// Tatsächliche macOS-Benachrichtigungs-Berechtigung (live abgefragt). Wird mit dem
+    /// gespeicherten Wunsch (`notificationsEnabled`) zu `notificationsActive` kombiniert, damit
+    /// das Häkchen nicht „lügt", wenn die Berechtigung in den Systemeinstellungen entzogen wurde.
+    private(set) var notificationsAuthorized: Bool = true
 
     let providers: [AccountProvider]
     private let store: StateStore
@@ -51,6 +55,7 @@ final class AppModel {
         // Nachfrage nie und Notifications bleiben still — genau das ist Theo passiert).
         if self.state.settings.notificationsEnabled {
             Notifier.requestAuthorization()
+            syncNotifications()
         }
         // Reconcile + erster Usage-Fetch laufen async: Keychain-Subprozesse (und ein evtl.
         // Keychain-Dialog) dürfen den MainActor beim Start nicht blockieren.
@@ -110,6 +115,8 @@ final class AppModel {
     // MARK: - Einstellungen (Anzeige/Notifications)
 
     var notificationsEnabled: Bool { state.settings.notificationsEnabled }
+    /// Effektiver Zustand fürs Menü-Häkchen: gewünscht UND vom System erlaubt.
+    var notificationsActive: Bool { notificationsEnabled && notificationsAuthorized }
     var showEmail: Bool { state.settings.showEmail }
 
     /// Anzeigeform eines Handles: voll oder maskiert (je nach „E-Mail anzeigen").
@@ -119,8 +126,38 @@ final class AppModel {
 
     func setNotificationsEnabled(_ enabled: Bool) {
         state.settings.notificationsEnabled = enabled
-        if enabled { Notifier.requestAuthorization() }
+        if enabled {
+            // Berechtigung anfragen. Wurde sie früher abgelehnt, zeigt macOS keinen Dialog mehr —
+            // dann den Systemeinstellungen-Bereich öffnen, damit der Nutzer sie erteilen kann.
+            Notifier.requestAuthorization { [weak self] granted in
+                Task { @MainActor in
+                    self?.notificationsAuthorized = granted
+                    if !granted { self?.openNotificationSettings() }
+                }
+            }
+        } else {
+            notificationsAuthorized = true  // Wunsch ist aus -> kein „abgewiesen"-Zustand
+        }
         persist()
+    }
+
+    /// Gleicht `notificationsAuthorized` mit dem echten System-Status ab (z.B. nach Entzug in den
+    /// Systemeinstellungen). Läuft bei jedem Poll mit.
+    func syncNotifications() {
+        guard state.settings.notificationsEnabled else {
+            notificationsAuthorized = true
+            return
+        }
+        Notifier.authorizationStatus { [weak self] ok in
+            Task { @MainActor in self?.notificationsAuthorized = ok }
+        }
+    }
+
+    /// Öffnet den Benachrichtigungs-Bereich der Systemeinstellungen.
+    private func openNotificationSettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.notifications") {
+            NSWorkspace.shared.open(url)
+        }
     }
 
     func setShowEmail(_ show: Bool) {
@@ -264,6 +301,7 @@ final class AppModel {
             persist()
         }
         syncLaunchAtLogin()  // hält das Häkchen aktuell, auch bei Änderung via System Settings
+        syncNotifications()  // dito für die Benachrichtigungs-Berechtigung
     }
 
     private func performRefresh(allowAutoSwitch: Bool) async {
