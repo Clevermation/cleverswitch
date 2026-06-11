@@ -12,7 +12,11 @@ struct MenuContent: View {
                 accountRows(for: provider)
                 autoSwitchMenu(for: provider)
                 if model.loginInProgress.contains(provider.id) {
-                    Label(L10n.t("login_running"), systemImage: "hourglass")
+                    Button {
+                        model.cancelLogin(for: provider)
+                    } label: {
+                        Label(L10n.t("login_cancel"), systemImage: "xmark.circle")
+                    }
                 } else {
                     Button {
                         model.addAccount(for: provider)

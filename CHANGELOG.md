@@ -2,6 +2,12 @@
 
 Alle nennenswerten Änderungen an CleverSwitch.
 
+## [0.1.1] – 2026-06-11
+
+- Login lässt sich jetzt **abbrechen** (Menü-Eintrag), statt bis zum 5-Minuten-Timeout „Login läuft" anzuzeigen.
+- Bricht man ab oder läuft es in den Timeout, wird der komplette Prozessbaum beendet — keine verwaisten Hintergrundprozesse mehr.
+- README mit Showcase, Troubleshooting, Uninstall.
+
 ## [0.1.0] – 2026-06-11
 
 Erste Version.

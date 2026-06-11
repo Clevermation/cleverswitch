@@ -27,6 +27,7 @@ final class AppModel {
     private var refreshTask: Task<Void, Never>?
     private var lastAutoSwitchAt: [String: Date] = [:]
     private var nearLimitWarned: Set<String> = []  // Frühwarnung pro Anbieter einmal pro Engpass
+    private var loginSessions: [String: HeadlessLogin] = [:]  // laufende Logins (abbrechbar)
 
     private static let pollInterval: Duration = .seconds(300)
     private static let autoSwitchCooldown: TimeInterval = 60
@@ -364,8 +365,10 @@ final class AppModel {
             return
         }
 
+        let session = HeadlessLogin()
+        loginSessions[provider.id] = session
         loginInProgress.insert(provider.id)
-        statusMessage = L10n.t("login_running")
+        statusMessage = nil  // Anzeige läuft über den abbrechbaren Menü-Eintrag, nicht die Statuszeile
         Log.info("login gestartet: \(provider.id)")
 
         let credentials = self.credentials
@@ -380,14 +383,23 @@ final class AppModel {
                 }
             }.value
 
-            let success = await HeadlessLogin.run(command: command)
+            let success = await session.run(command: command)
+            let wasCancelled = session.wasCancelled
+            self.loginSessions[provider.id] = nil
             self.loginInProgress.remove(provider.id)
-            Log.info("login \(success ? "erfolgreich" : "fehlgeschlagen/abgebrochen"): \(provider.id)")
-            // Auch im Fehlerpfad reconcilen: der Browser-Flow kann erfolgreich gewesen sein,
-            // während `script` per Timeout mit Exit≠0 endete — sonst ginge der Login verloren.
-            self.statusMessage = success ? nil : L10n.t("login_failed")
+            Log.info(
+                "login \(success ? "erfolgreich" : wasCancelled ? "abgebrochen" : "fehlgeschlagen"): \(provider.id)")
+            // Bei Abbruch keine Fehlermeldung. Bei Fehlschlag schon. In beiden Fällen reconcilen:
+            // der Browser-Flow kann erfolgreich gewesen sein, während `script` per Timeout endete.
+            self.statusMessage = (success || wasCancelled) ? nil : L10n.t("login_failed")
             await self.importCurrentLogin(for: provider)
         }
+    }
+
+    /// Bricht einen laufenden Login ab (beendet den Prozessbaum) und räumt die Anzeige auf.
+    func cancelLogin(for provider: AccountProvider) {
+        loginSessions[provider.id]?.cancel()
+        // loginInProgress/statusMessage werden vom run()-Completion-Handler aufgeräumt.
     }
 
     // MARK: - Launch at Login
