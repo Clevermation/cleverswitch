@@ -165,12 +165,28 @@ public struct ClaudeProvider: AccountProvider {
 
     static func findExecutable(_ name: String) -> String? {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
+        // 1. Bekannte Installationsorte (claude-Installer, bun, Homebrew).
         let candidates = [
             "\(home)/.local/bin/\(name)",
+            "\(home)/.bun/bin/\(name)",
             "/opt/homebrew/bin/\(name)",
             "/usr/local/bin/\(name)",
         ]
-        return candidates.first { FileManager.default.isExecutableFile(atPath: $0) }
+        if let direct = candidates.first(where: { FileManager.default.isExecutableFile(atPath: $0) }) {
+            return direct
+        }
+        // 2. Interaktive Login-Shell nach dem Binary fragen — lädt die volle User-PATH inkl.
+        //    .zshrc (wo bun/mise/nvm ihre PATH oft setzen). Eine GUI-App startet mit minimaler
+        //    PATH, deshalb reicht das Abklappern fester Pfade nicht. Letzte gültige Zeile nehmen,
+        //    falls .zshrc Rauschen ausgibt.
+        let result = Subprocess.run("/bin/zsh", ["-ilc", "command -v \(name) 2>/dev/null"])
+        for line in result.stdout.split(separator: "\n").reversed() {
+            let path = line.trimmingCharacters(in: .whitespaces)
+            if !path.isEmpty, FileManager.default.isExecutableFile(atPath: path) {
+                return path
+            }
+        }
+        return nil
     }
 }
 

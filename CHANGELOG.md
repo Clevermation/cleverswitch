@@ -2,6 +2,13 @@
 
 Alle nennenswerten Änderungen an CleverSwitch.
 
+## [0.1.2] – 2026-06-11
+
+- **Login funktioniert jetzt wirklich** (Theos Bug): Claudes Login braucht das Einfügen eines Codes aus dem Browser — das geht nur sichtbar. „Account hinzufügen" öffnet jetzt einen sauberen, gebrandeten Sign-in-Tab; den Abschluss erkennt die App automatisch und importiert den Account.
+- **CLI-Erkennung robuster**: findet `claude`/`codex` auch über die Login-Shell (bun/mise/npm/nvm), nicht nur in festen Pfaden.
+- **Benachrichtigungs-Berechtigung** wird beim ersten Start angefragt (vorher kam die Nachfrage nie).
+- README: „Made in Germany" + Link zu Clevermation.
+
 ## [0.1.1] – 2026-06-11
 
 - Login lässt sich jetzt **abbrechen** (Menü-Eintrag), statt bis zum 5-Minuten-Timeout „Login läuft" anzuzeigen.

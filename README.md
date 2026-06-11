@@ -15,6 +15,7 @@ One click to switch the active **Claude Code** or **Codex** session · live usag
 [![macOS 14+](https://img.shields.io/badge/macOS-14%2B-111?logo=apple)](#requirements)
 [![Swift 6](https://img.shields.io/badge/Swift-6-orange?logo=swift&logoColor=white)](Package.swift)
 [![i18n](https://img.shields.io/badge/i18n-16_languages-4f46e5)](#features)
+[![Made in Germany](https://img.shields.io/badge/made_in-Germany-4f46e5)](https://clevermation.com)
 
 <img src="docs/showcase.svg" width="560" alt="CleverSwitch menu showing two Claude accounts and one Codex account with live usage; email addresses are masked" />
 
@@ -122,4 +123,4 @@ layer in `CleverSwitchKit` is pure and unit-tested, so logic changes come with t
 
 [MIT](LICENSE) — an independent, clean-room implementation. See [`NOTICE`](NOTICE).
 
-<div align="center"><sub>Built by <a href="https://clevermation.com">Clevermation</a>.</sub></div>
+<div align="center"><sub>🇩🇪 Made in Germany by <a href="https://clevermation.com"><b>Clevermation</b></a> — your AI-first agency.</sub></div>

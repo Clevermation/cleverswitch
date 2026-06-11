@@ -27,7 +27,7 @@ final class AppModel {
     private var refreshTask: Task<Void, Never>?
     private var lastAutoSwitchAt: [String: Date] = [:]
     private var nearLimitWarned: Set<String> = []  // Frühwarnung pro Anbieter einmal pro Engpass
-    private var loginSessions: [String: HeadlessLogin] = [:]  // laufende Logins (abbrechbar)
+    private var loginWatchTasks: [String: Task<Void, Never>] = [:]  // laufende Login-Beobachtung
 
     private static let pollInterval: Duration = .seconds(300)
     private static let autoSwitchCooldown: TimeInterval = 60
@@ -43,6 +43,11 @@ final class AppModel {
         self.http = http
         self.providers = providers
         self.state = store.load()
+        // Benachrichtigungs-Berechtigung früh anfragen, wenn aktiviert (sonst erscheint die
+        // Nachfrage nie und Notifications bleiben still — genau das ist Theo passiert).
+        if self.state.settings.notificationsEnabled {
+            Notifier.requestAuthorization()
+        }
         // Reconcile + erster Usage-Fetch laufen async: Keychain-Subprozesse (und ein evtl.
         // Keychain-Dialog) dürfen den MainActor beim Start nicht blockieren.
         Task {
@@ -357,7 +362,8 @@ final class AppModel {
         persist()
     }
 
-    /// Startet den CLI-Login unsichtbar im Hintergrund; importiert danach automatisch.
+    /// Startet den offiziellen CLI-Login in einem sauberen Terminal-Tab und erkennt den Abschluss
+    /// selbst per Polling (der „Code einfügen"-Flow von Claude braucht ein sichtbares Eingabefeld).
     func addAccount(for provider: AccountProvider) {
         guard !loginInProgress.contains(provider.id) else { return }
         guard let command = provider.loginCommand() else {
@@ -365,41 +371,61 @@ final class AppModel {
             return
         }
 
-        let session = HeadlessLogin()
-        loginSessions[provider.id] = session
         loginInProgress.insert(provider.id)
-        statusMessage = nil  // Anzeige läuft über den abbrechbaren Menü-Eintrag, nicht die Statuszeile
+        statusMessage = nil  // Anzeige läuft über den abbrechbaren Menü-Eintrag
         Log.info("login gestartet: \(provider.id)")
 
         let credentials = self.credentials
-        let activeSnapshot = state.activeAccount(provider: provider.id)
+        let before = state.activeAccount(provider: provider.id)?.handle
+
         Task {
             // Aktiven Account sichern, BEVOR der Login den Live-Slot überschreibt (off-MainActor).
             await Task.detached {
-                if let active = activeSnapshot, let live = provider.readLive(credentials: credentials) {
+                if let activeHandle = before, let live = provider.readLive(credentials: credentials) {
                     try? credentials.write(
-                        service: provider.snapshotService(handle: active.handle),
-                        account: active.handle, secret: live)
+                        service: provider.snapshotService(handle: activeHandle),
+                        account: activeHandle, secret: live)
                 }
             }.value
-
-            let success = await session.run(command: command)
-            let wasCancelled = session.wasCancelled
-            self.loginSessions[provider.id] = nil
-            self.loginInProgress.remove(provider.id)
-            Log.info(
-                "login \(success ? "erfolgreich" : wasCancelled ? "abgebrochen" : "fehlgeschlagen"): \(provider.id)")
-            // Bei Abbruch keine Fehlermeldung. Bei Fehlschlag schon. In beiden Fällen reconcilen:
-            // der Browser-Flow kann erfolgreich gewesen sein, während `script` per Timeout endete.
-            self.statusMessage = (success || wasCancelled) ? nil : L10n.t("login_failed")
-            await self.importCurrentLogin(for: provider)
+            TerminalLogin.open(command: command, providerName: provider.displayName)
         }
+
+        // Auf den fertigen Login warten (neue Identität im Live-Slot) und automatisch importieren.
+        loginWatchTasks[provider.id] = Task { await watchLogin(for: provider, before: before) }
     }
 
-    /// Bricht einen laufenden Login ab (beendet den Prozessbaum) und räumt die Anzeige auf.
+    private static let loginWatchTimeout: TimeInterval = 240
+    private static let loginPollInterval: Duration = .seconds(2)
+
+    private func watchLogin(for provider: AccountProvider, before: String?) async {
+        let credentials = self.credentials
+        let deadline = Date().addingTimeInterval(Self.loginWatchTimeout)
+        while Date() < deadline {
+            try? await Task.sleep(for: Self.loginPollInterval)
+            if Task.isCancelled { return }
+            let identity = await Task.detached { provider.currentIdentity(credentials: credentials) }.value
+            if let identity, identity.handle != before {
+                Log.info("login erkannt: \(provider.id) \(identity.handle)")
+                await adopt(identity: identity, for: provider)
+                await refreshUsage()
+                loginInProgress.remove(provider.id)
+                loginWatchTasks[provider.id] = nil
+                return
+            }
+        }
+        // Timeout: kein neuer Login erkannt.
+        Log.info("login timeout/kein neuer Account: \(provider.id)")
+        loginInProgress.remove(provider.id)
+        loginWatchTasks[provider.id] = nil
+        statusMessage = L10n.t("login_failed")
+    }
+
+    /// Bricht die Login-Beobachtung ab (das Terminal-Fenster schließt der User selbst).
     func cancelLogin(for provider: AccountProvider) {
-        loginSessions[provider.id]?.cancel()
-        // loginInProgress/statusMessage werden vom run()-Completion-Handler aufgeräumt.
+        loginWatchTasks[provider.id]?.cancel()
+        loginWatchTasks[provider.id] = nil
+        loginInProgress.remove(provider.id)
+        statusMessage = nil
     }
 
     // MARK: - Launch at Login
