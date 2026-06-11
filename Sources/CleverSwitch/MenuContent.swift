@@ -10,7 +10,11 @@ struct MenuContent: View {
         ForEach(model.providers, id: \.id) { provider in
             Section(provider.displayName) {
                 accountRows(for: provider)
-                autoSwitchMenu(for: provider)
+                // Auto-Switch nur anbieten, wenn es mind. 2 Accounts gibt — sonst ist „wechseln"
+                // sinnlos.
+                if model.accounts(for: provider).count >= 2 {
+                    autoSwitchMenu(for: provider)
+                }
                 if model.loginInProgress.contains(provider.id) {
                     Button {
                         model.cancelLogin(for: provider)
@@ -80,7 +84,7 @@ struct MenuContent: View {
                 // Plan + Usage eingerückt in zweiter Zeile -> bei ALLEN Accounts gleicher
                 // Abstand von links, unabhängig von der E-Mail-Länge (symmetrisch).
                 let plan = account.label.isEmpty ? "" : "\(account.label) · "
-                Text("    \(plan)\(model.usageText(for: account))")
+                Text("\(model.usageDot(for: account))\(plan)\(model.usageText(for: account))")
             }
         }
     }
@@ -123,8 +127,10 @@ struct MenuContent: View {
                 }
             }
         } label: {
+            // Kurzes Label im Eltern-Eintrag (z.B. „Auto-Switch · Failover") — die lange
+            // Beschreibung steht im Untermenü. Sonst wird das ganze Menü unnötig breit.
             Label(
-                "\(L10n.t("auto_switch"))  ·  \(L10n.t("mode_\(current.rawValue)"))",
+                "\(L10n.t("auto_switch")) · \(L10n.t("mode_\(current.rawValue)_short"))",
                 systemImage: "arrow.triangle.2.circlepath"
             )
         }

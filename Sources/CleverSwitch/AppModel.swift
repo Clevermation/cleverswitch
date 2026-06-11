@@ -80,9 +80,22 @@ final class AppModel {
             (UsageWindowKey.weekly, provider.weeklyWindowLabel),
         ] {
             guard let pct = snapshot.pct(key) else { continue }
-            parts.append("\(label) \(Int(pct))%")
+            let resetsAt = snapshot.windows.first { $0.key == key }?.resetsAt
+            let countdown = ResetFormatter.shortCountdown(from: resetsAt).map { " (\($0))" } ?? ""
+            parts.append("\(label) \(Int(pct))%\(countdown)")
         }
         return parts.isEmpty ? L10n.t("usage_unknown") : parts.joined(separator: " · ")
+    }
+
+    /// Ampel-Punkt nach höchster Auslastung (grün < 60 %, gelb < 85 %, rot darüber).
+    /// Emoji statt Textfarbe, weil native Menüs `.foregroundStyle` ignorieren.
+    func usageDot(for account: Account) -> String {
+        guard let snapshot = usage[account.id], snapshot.known, let worst = snapshot.worstPct else {
+            return ""
+        }
+        if worst >= 85 { return "🔴 " }
+        if worst >= 60 { return "🟡 " }
+        return "🟢 "
     }
 
     /// Kompakter Text neben dem Menüleisten-Icon: höchste Session-Auslastung unter ALLEN
@@ -466,7 +479,7 @@ final class AppModel {
         loginProcesses[providerID]?.cancel()
         loginProcesses[providerID] = nil
         loginInProgress.remove(providerID)
-        if let error { statusMessage = error }
+        statusMessage = error  // nil bei Erfolg/Abbruch -> löscht den „Browser-Tab"-Hinweis
     }
 
     // MARK: - Launch at Login
