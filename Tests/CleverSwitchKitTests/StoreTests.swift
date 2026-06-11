@@ -61,4 +61,23 @@ struct StoreTests {
         #expect(settings.mode(for: "claude") == .failover)
         #expect(settings.mode(for: "codex") == .off)
     }
+
+    @Test("menuBarSource: Default + Round-Trip + alte JSON ohne Feld")
+    func menuBarSourcePersistence() throws {
+        // Default ist "highest".
+        #expect(AppSettings().menuBarSource == "highest")
+
+        // Round-Trip über den Store.
+        let url = tempURL()
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        var settings = AppSettings()
+        settings.menuBarSource = "codex"
+        try StateStore(url: url).save(PersistedState(settings: settings))
+        #expect(StateStore(url: url).load().settings.menuBarSource == "codex")
+
+        // Alte state.json ohne das Feld -> faellt auf "highest" zurueck.
+        let legacy = #"{"notificationsEnabled":true,"showEmail":true}"#
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: Data(legacy.utf8))
+        #expect(decoded.menuBarSource == "highest")
+    }
 }

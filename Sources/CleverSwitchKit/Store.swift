@@ -13,17 +13,21 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var notificationsEnabled: Bool
     /// E-Mail-Adressen im Menü anzeigen (false = maskiert, z.B. für Screen-Recordings/Streamer).
     public var showEmail: Bool
+    /// Quelle der Menüleisten-Zahl: "highest" (alle aktiven), "claude" oder "codex".
+    public var menuBarSource: String
 
     public init(
         modes: [String: SwitchMode] = [:],
         policy: PolicyConfig = .default,
         notificationsEnabled: Bool = true,
-        showEmail: Bool = true
+        showEmail: Bool = true,
+        menuBarSource: String = "highest"
     ) {
         self.modes = modes
         self.policy = policy
         self.notificationsEnabled = notificationsEnabled
         self.showEmail = showEmail
+        self.menuBarSource = menuBarSource
     }
 
     // Optionale Decodierung: ältere state.json ohne diese Felder bleiben lesbar.
@@ -34,6 +38,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
         notificationsEnabled =
             try container.decodeIfPresent(Bool.self, forKey: .notificationsEnabled) ?? true
         showEmail = try container.decodeIfPresent(Bool.self, forKey: .showEmail) ?? true
+        menuBarSource =
+            try container.decodeIfPresent(String.self, forKey: .menuBarSource) ?? "highest"
     }
 
     /// Auto-Switch-Modus eines Anbieters (Default: off).

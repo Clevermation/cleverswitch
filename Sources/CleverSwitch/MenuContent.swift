@@ -33,6 +33,9 @@ struct MenuContent: View {
         } label: {
             Label(L10n.t("refresh_usage"), systemImage: "arrow.clockwise")
         }
+        if let updated = model.lastUpdatedText {
+            Text(updated).foregroundStyle(.secondary)
+        }
 
         // Account hinzufügen — ein Eintrag mit Anbieter-Auswahl (Claude Code / Codex CLI).
         Menu {
@@ -73,7 +76,9 @@ struct MenuContent: View {
 
     @ViewBuilder
     private func accountRows(for provider: AccountProvider) -> some View {
-        let accounts = model.accounts(for: provider)
+        let raw = model.accounts(for: provider)
+        // Aktiver Account immer zuerst (stabil, ohne die übrige Reihenfolge zu verwürfeln).
+        let accounts = raw.filter(\.active) + raw.filter { !$0.active }
         if accounts.isEmpty {
             Label(L10n.t("no_accounts"), systemImage: "person.crop.circle.badge.questionmark")
         } else {
@@ -86,41 +91,46 @@ struct MenuContent: View {
                         systemImage: account.active ? "checkmark.circle.fill" : "circle"
                     )
                 }
-                // Plan + Usage eingerückt in zweiter Zeile -> bei ALLEN Accounts gleicher
-                // Abstand von links, unabhängig von der E-Mail-Länge (symmetrisch).
+                // Plan + Usage in zweiter Zeile, monospaced -> Spalten (Abo · Session · Woche)
+                // richten sich über alle Accounts hinweg sauber aus.
                 usageLine(for: account)
+                    .font(.system(.callout, design: .monospaced))
             }
         }
     }
 
-    /// Zweite Zeile pro Account: Plan + Usage, wobei die Prozent-Zahl je nach Auslastung
-    /// eingefärbt ist (grün < 60 %, orange < 85 %, rot darüber). Kein Emoji.
+    /// Zweite Zeile pro Account: Plan + Usage in festen Spaltenbreiten (monospaced gesetzt in
+    /// `accountRows`), damit Abo · Session · Woche über alle Accounts hinweg untereinander stehen.
+    /// Die Prozent-Zahl ist je nach Auslastung eingefärbt (grün < 60 %, orange < 85 %, rot darüber).
     private func usageLine(for account: Account) -> Text {
         func color(_ pct: Double) -> Color { pct >= 85 ? .red : (pct >= 60 ? .orange : .green) }
+        // Rechts-/linksbündig auf feste Zeichenbreite auffüllen (wirkt nur monospaced sauber).
+        func pad(_ s: String, _ n: Int, right: Bool = false) -> String {
+            let gap = String(repeating: " ", count: max(0, n - s.count))
+            return right ? gap + s : s + gap
+        }
         let dash = Text(L10n.t("usage_unknown")).foregroundStyle(.secondary)
         guard let snapshot = model.usage[account.id], snapshot.known,
             let provider = model.provider(account.provider)
         else { return dash }
 
-        var line = Text("")
-        if !account.label.isEmpty {
-            line = line + Text("\(account.label)  ·  ").foregroundStyle(.secondary)
-        }
+        // Abo-Label linksbündig, feste Breite (z.B. "max ", "pro ").
+        var line = Text(pad(account.label, 4)).foregroundStyle(.secondary)
         var any = false
         for (key, label) in [
             (UsageWindowKey.session, provider.sessionWindowLabel),
             (UsageWindowKey.weekly, provider.weeklyWindowLabel),
         ] {
             guard let pct = snapshot.pct(key) else { continue }
-            if any { line = line + Text("  ·  ").foregroundStyle(.secondary) }
             any = true
+            let pctStr = "\(Int(pct))%"
             let resetsAt = snapshot.windows.first { $0.key == key }?.resetsAt
-            let countdown = ResetFormatter.shortCountdown(from: resetsAt).map { " (\($0))" } ?? ""
+            let countdown = ResetFormatter.shortCountdown(from: resetsAt).map { "(\($0))" } ?? ""
             line =
                 line
-                + Text("\(label) ").foregroundStyle(.secondary)
-                + Text("\(Int(pct))%").foregroundStyle(color(pct))
-                + Text(countdown).foregroundStyle(.secondary)
+                + Text(" · \(pad(label, 2)) ").foregroundStyle(.secondary)
+                + Text(pad(pctStr, 4, right: true)).foregroundStyle(color(pct))  // rechtsbündig: "  8%"
+                + Text(" \(pad(countdown, 9))").foregroundStyle(.secondary)  // feste Breite -> Spalte
         }
         return any ? line : dash
     }
@@ -136,6 +146,22 @@ struct MenuContent: View {
             toggle(
                 L10n.t("show_email"), isOn: model.showEmail,
                 action: { model.setShowEmail(!model.showEmail) })
+            // Quelle der Menüleisten-Zahl wählen (nur sinnvoll bei mehr als einem Anbieter).
+            if model.providers.count >= 2 {
+                Divider()
+                Menu {
+                    toggle(
+                        L10n.t("menubar_source_highest"), isOn: model.menuBarSource == "highest",
+                        action: { model.setMenuBarSource("highest") })
+                    ForEach(model.providers, id: \.id) { provider in
+                        toggle(
+                            provider.displayName, isOn: model.menuBarSource == provider.id,
+                            action: { model.setMenuBarSource(provider.id) })
+                    }
+                } label: {
+                    Label(L10n.t("menubar_source"), systemImage: "number")
+                }
+            }
         } label: {
             Label(L10n.t("settings"), systemImage: "gearshape")
         }

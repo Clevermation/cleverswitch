@@ -93,14 +93,32 @@ final class AppModel {
     }
 
 
-    /// Kompakter Text neben dem Menüleisten-Icon: höchste Session-Auslastung unter ALLEN
-    /// aktiven Accounts (also der, der gerade am nächsten an seinem Limit ist).
+    /// Kompakter Text neben dem Menüleisten-Icon: höchste Session-Auslastung. Welche Accounts
+    /// einbezogen werden, steuert `menuBarSource` ("highest" = alle aktiven, sonst nur ein Anbieter).
     var menuBarText: String? {
-        let sessions = state.accounts
-            .filter(\.active)
-            .compactMap { usage[$0.id]?.pct(UsageWindowKey.session) }
+        let source = state.settings.menuBarSource
+        let active = state.accounts.filter(\.active)
+        let scoped = source == "highest" ? active : active.filter { $0.provider == source }
+        let sessions = scoped.compactMap { usage[$0.id]?.pct(UsageWindowKey.session) }
         guard let worst = sessions.max() else { return nil }
         return "\(Int(worst))%"
+    }
+
+    var menuBarSource: String { state.settings.menuBarSource }
+    func setMenuBarSource(_ source: String) {
+        state.settings.menuBarSource = source
+        persist()
+    }
+
+    /// Zeitpunkt des letzten erfolgreichen Usage-Abrufs (für die „zuletzt aktualisiert"-Zeile).
+    private(set) var lastRefreshAt: Date?
+    /// Relative „vor X" Anzeige. Wird bei jedem Menü-Öffnen frisch berechnet.
+    var lastUpdatedText: String? {
+        guard let at = lastRefreshAt else { return nil }
+        let secs = Int(Date().timeIntervalSince(at))
+        if secs < 60 { return L10n.t("updated_just_now") }
+        if secs < 3600 { return L10n.t("last_updated", "\(secs / 60) min") }
+        return L10n.t("last_updated", "\(secs / 3600) h")
     }
 
     private func persist() {
@@ -300,6 +318,7 @@ final class AppModel {
             }
             persist()
         }
+        lastRefreshAt = Date()
         syncLaunchAtLogin()  // hält das Häkchen aktuell, auch bei Änderung via System Settings
         syncNotifications()  // dito für die Benachrichtigungs-Berechtigung
     }
