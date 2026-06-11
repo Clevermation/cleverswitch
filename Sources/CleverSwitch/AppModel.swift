@@ -87,16 +87,6 @@ final class AppModel {
         return parts.isEmpty ? L10n.t("usage_unknown") : parts.joined(separator: " · ")
     }
 
-    /// Ampel-Punkt nach höchster Auslastung (grün < 60 %, gelb < 85 %, rot darüber).
-    /// Emoji statt Textfarbe, weil native Menüs `.foregroundStyle` ignorieren.
-    func usageDot(for account: Account) -> String {
-        guard let snapshot = usage[account.id], snapshot.known, let worst = snapshot.worstPct else {
-            return ""
-        }
-        if worst >= 85 { return "🔴 " }
-        if worst >= 60 { return "🟡 " }
-        return "🟢 "
-    }
 
     /// Kompakter Text neben dem Menüleisten-Icon: höchste Session-Auslastung unter ALLEN
     /// aktiven Accounts (also der, der gerade am nächsten an seinem Limit ist).

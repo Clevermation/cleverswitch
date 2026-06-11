@@ -15,17 +15,12 @@ struct MenuContent: View {
                 if model.accounts(for: provider).count >= 2 {
                     autoSwitchMenu(for: provider)
                 }
+                // Läuft gerade ein Login für DIESEN Anbieter, Abbrechen anbieten.
                 if model.loginInProgress.contains(provider.id) {
                     Button {
                         model.cancelLogin(for: provider)
                     } label: {
                         Label(L10n.t("login_cancel"), systemImage: "xmark.circle")
-                    }
-                } else {
-                    Button {
-                        model.addAccount(for: provider)
-                    } label: {
-                        Label(L10n.t("add_account"), systemImage: "plus.circle")
                     }
                 }
             }
@@ -37,6 +32,16 @@ struct MenuContent: View {
             model.forceRefresh()
         } label: {
             Label(L10n.t("refresh_usage"), systemImage: "arrow.clockwise")
+        }
+
+        // Account hinzufügen — ein Eintrag mit Anbieter-Auswahl (Claude Code / Codex CLI).
+        Menu {
+            ForEach(model.providers, id: \.id) { provider in
+                Button(provider.displayName) { model.addAccount(for: provider) }
+                    .disabled(model.loginInProgress.contains(provider.id))
+            }
+        } label: {
+            Label(L10n.t("add_account"), systemImage: "plus.circle")
         }
 
         if !model.removableAccounts.isEmpty {
@@ -83,10 +88,41 @@ struct MenuContent: View {
                 }
                 // Plan + Usage eingerückt in zweiter Zeile -> bei ALLEN Accounts gleicher
                 // Abstand von links, unabhängig von der E-Mail-Länge (symmetrisch).
-                let plan = account.label.isEmpty ? "" : "\(account.label) · "
-                Text("\(model.usageDot(for: account))\(plan)\(model.usageText(for: account))")
+                usageLine(for: account)
             }
         }
+    }
+
+    /// Zweite Zeile pro Account: Plan + Usage, wobei die Prozent-Zahl je nach Auslastung
+    /// eingefärbt ist (grün < 60 %, orange < 85 %, rot darüber). Kein Emoji.
+    private func usageLine(for account: Account) -> Text {
+        func color(_ pct: Double) -> Color { pct >= 85 ? .red : (pct >= 60 ? .orange : .green) }
+        let dash = Text(L10n.t("usage_unknown")).foregroundStyle(.secondary)
+        guard let snapshot = model.usage[account.id], snapshot.known,
+            let provider = model.provider(account.provider)
+        else { return dash }
+
+        var line = Text("")
+        if !account.label.isEmpty {
+            line = line + Text("\(account.label)  ·  ").foregroundStyle(.secondary)
+        }
+        var any = false
+        for (key, label) in [
+            (UsageWindowKey.session, provider.sessionWindowLabel),
+            (UsageWindowKey.weekly, provider.weeklyWindowLabel),
+        ] {
+            guard let pct = snapshot.pct(key) else { continue }
+            if any { line = line + Text("  ·  ").foregroundStyle(.secondary) }
+            any = true
+            let resetsAt = snapshot.windows.first { $0.key == key }?.resetsAt
+            let countdown = ResetFormatter.shortCountdown(from: resetsAt).map { " (\($0))" } ?? ""
+            line =
+                line
+                + Text("\(label) ").foregroundStyle(.secondary)
+                + Text("\(Int(pct))%").foregroundStyle(color(pct))
+                + Text(countdown).foregroundStyle(.secondary)
+        }
+        return any ? line : dash
     }
 
     private var settingsMenu: some View {
