@@ -80,9 +80,7 @@ final class AppModel {
             (UsageWindowKey.weekly, provider.weeklyWindowLabel),
         ] {
             guard let pct = snapshot.pct(key) else { continue }
-            let resetsAt = snapshot.windows.first { $0.key == key }?.resetsAt
-            let countdown = ResetFormatter.shortCountdown(from: resetsAt).map { " (\($0))" } ?? ""
-            parts.append("\(label) \(Int(pct))%\(countdown)")
+            parts.append("\(label) \(Int(pct))%")
         }
         return parts.isEmpty ? L10n.t("usage_unknown") : parts.joined(separator: " · ")
     }
@@ -135,6 +133,9 @@ final class AppModel {
     func reconcileLiveIdentities() async {
         for provider in providers {
             let credentials = self.credentials
+            // Doppelte Live-Slot-Einträge bereinigen (frischesten Token nach vorne) — sonst liest
+            // `security -w` evtl. einen alten, abgelaufenen Token (claude-login-Duplikate).
+            await Task.detached { provider.consolidateLive(credentials: credentials) }.value
             let identity = await Task.detached { provider.currentIdentity(credentials: credentials) }.value
             guard let identity else { continue }
             if state.activeAccount(provider: provider.id)?.handle == identity.handle { continue }
@@ -445,6 +446,9 @@ final class AppModel {
             let identity = await Task.detached { provider.currentIdentity(credentials: credentials) }.value
             if let identity, identity.handle != before {
                 Log.info("login erkannt: \(provider.id) \(identity.handle)")
+                // Der Login hat einen frischen Token-Eintrag angelegt — Duplikate bereinigen,
+                // damit der Live-Slot den NEUEN (gültigen) Token liefert, nicht den alten.
+                await Task.detached { provider.consolidateLive(credentials: credentials) }.value
                 await adopt(identity: identity, for: provider)
                 await refreshUsage()
                 finishLogin(for: provider.id, error: nil)

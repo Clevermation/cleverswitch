@@ -68,6 +68,10 @@ public protocol AccountProvider: Sendable {
     /// (refreshedBlob zurückspeichern). Scheitert der Refresh, ist `refreshFailed` gesetzt.
     func fetchUsage(blob: String, http: HTTPClient, allowRefresh: Bool) async -> UsageOutcome
 
+    /// Bereinigt doppelte Live-Slot-Einträge. `claude auth login` legt bei jedem Login einen
+    /// NEUEN Keychain-Eintrag an, ohne den alten zu löschen → `security -w` liefert dann den
+    /// falschen (alten, abgelaufenen). Hier wird auf den frischesten Token reduziert.
+    func consolidateLive(credentials: CredentialStore)
     /// Identität des aktuell im Live-Slot eingeloggten Accounts (für Import), oder nil.
     func currentIdentity(credentials: CredentialStore) -> AccountIdentity?
     /// Nach dem Aktivieren: anbieter-spezifische Sitzungsdaten nachziehen (z.B. ~/.claude.json).
@@ -79,6 +83,8 @@ public protocol AccountProvider: Sendable {
 extension AccountProvider {
     public var sessionWindowLabel: String { "5h" }
     public var weeklyWindowLabel: String { "7d" }
+    /// Default: nichts zu bereinigen (z.B. bei Datei-basiertem Live-Slot wie Codex).
+    public func consolidateLive(credentials: CredentialStore) {}
 }
 
 // MARK: - Claude Code
@@ -145,6 +151,21 @@ public struct ClaudeProvider: AccountProvider {
             }
             return UsageOutcome(usage: .unknown, refreshedBlob: refreshed)
         }
+    }
+
+    public func consolidateLive(credentials: CredentialStore) {
+        // Alle Einträge des Live-Service draften (read+delete enumeriert sie) und den frischesten
+        // Token (höchstes expiresAt) als EINZIGEN wieder schreiben. Cap gegen Endlosschleife.
+        var entries: [(account: String, secret: String, expiresAt: Double)] = []
+        for _ in 0..<10 {
+            guard let secret = credentials.read(service: liveCredentialService) else { break }
+            let account = credentials.readAccount(service: liveCredentialService) ?? "unknown"
+            entries.append((account, secret, ClaudeAuth.expiresAtMillis(in: secret) ?? 0))
+            credentials.delete(service: liveCredentialService)
+        }
+        guard let freshest = entries.max(by: { $0.expiresAt < $1.expiresAt }) else { return }
+        try? credentials.write(
+            service: liveCredentialService, account: freshest.account, secret: freshest.secret)
     }
 
     public func currentIdentity(credentials: CredentialStore) -> AccountIdentity? {

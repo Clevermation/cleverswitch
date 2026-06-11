@@ -80,7 +80,7 @@ struct MenuContent: View {
                 // Plan + Usage eingerückt in zweiter Zeile -> bei ALLEN Accounts gleicher
                 // Abstand von links, unabhängig von der E-Mail-Länge (symmetrisch).
                 let plan = account.label.isEmpty ? "" : "\(account.label) · "
-                Text("       \(plan)\(model.usageText(for: account))")
+                Text("    \(plan)\(model.usageText(for: account))")
             }
         }
     }
