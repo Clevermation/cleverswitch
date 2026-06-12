@@ -245,7 +245,7 @@ struct MenuContent: View {
                 Label(L10n.t("open_onboarding"), systemImage: "sparkles")
             }
             // Version + manuelle Update-Prüfung.
-            Button("CleverSwitch \(cleverSwitchVersion)") {
+            Button(model.versionLine) {
                 NSWorkspace.shared.open(UpdateChecker.releasesPage)
             }
             if model.showUpToDate {

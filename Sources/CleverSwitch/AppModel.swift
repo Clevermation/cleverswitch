@@ -665,6 +665,18 @@ final class AppModel {
         return until > Date()
     }
 
+    /// Versionszeile fürs Einstellungs-Menü: IMMER die installierte Version, plus Zustand —
+    /// „0.1.5 → 0.1.6" wenn ein Update bekannt ist, „· aktuell" nach bestätigter Prüfung.
+    var versionLine: String {
+        if let updateAvailable {
+            return "CleverSwitch \(cleverSwitchVersion) → \(updateAvailable)"
+        }
+        if lastUpdateCheckAt != nil {
+            return "CleverSwitch \(cleverSwitchVersion) · \(L10n.t("up_to_date_short"))"
+        }
+        return "CleverSwitch \(cleverSwitchVersion)"
+    }
+
     /// Manuelle Prüfung (Einstellungen) — zeigt danach „auf dem neuesten Stand" im Menü.
     func checkForUpdateNow() {
         lastUpdateCheckAt = nil
