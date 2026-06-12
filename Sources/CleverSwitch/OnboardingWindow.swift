@@ -49,6 +49,7 @@ private struct OnboardingView: View {
     let close: () -> Void
 
     @State private var step: OnboardingStep = .hello
+    @State private var helloAppeared = false  // Entrance-Animation des Hello-Schritts
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var totalAccounts: Int {
@@ -106,23 +107,42 @@ private struct OnboardingView: View {
     // MARK: Schritt 0 — Hello (Kino-Moment)
 
     private var helloStep: some View {
+        // Gestaffelter Einzug (Icon schwebt mit Spring ein, Texte und Button folgen) —
+        // der „Filmvorspann"-Moment beim allerersten Öffnen.
         VStack(spacing: 18) {
             Image(nsImage: NSApp.applicationIconImage)
                 .resizable()
                 .frame(width: 108, height: 108)
                 .shadow(color: .black.opacity(0.4), radius: 18, y: 8)
+                .scaleEffect(helloAppeared ? 1 : 0.4)
+                .opacity(helloAppeared ? 1 : 0)
+                .animation(entrance(delay: 0.1), value: helloAppeared)
             Text(L10n.t("onboarding_hello_title"))
                 .font(.system(size: 32, weight: .bold, design: .rounded))
+                .opacity(helloAppeared ? 1 : 0)
+                .offset(y: helloAppeared ? 0 : 14)
+                .animation(entrance(delay: 0.35), value: helloAppeared)
             Text(L10n.t("onboarding_hello_sub"))
                 .font(.title3)
                 .foregroundStyle(.white.opacity(0.75))
                 .multilineTextAlignment(.center)
+                .opacity(helloAppeared ? 1 : 0)
+                .offset(y: helloAppeared ? 0 : 14)
+                .animation(entrance(delay: 0.5), value: helloAppeared)
             Button(L10n.t("onboarding_go")) { advance(.cli) }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
                 .keyboardShortcut(.defaultAction)
                 .padding(.top, 10)
+                .opacity(helloAppeared ? 1 : 0)
+                .animation(entrance(delay: 0.7), value: helloAppeared)
         }
+        .onAppear { helloAppeared = true }
+    }
+
+    /// Spring-Animation mit Verzögerung — bei „Bewegung reduzieren" keine.
+    private func entrance(delay: Double) -> Animation? {
+        reduceMotion ? nil : .spring(response: 0.55, dampingFraction: 0.75).delay(delay)
     }
 
     // MARK: Schritt 1 — CLI-Check (automatisches „little win")

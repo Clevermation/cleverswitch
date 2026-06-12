@@ -184,7 +184,10 @@ struct MenuContent: View {
                 action: { model.setLaunchAtLogin(!model.launchAtLogin) })
             toggle(
                 L10n.t("notifications"), isOn: model.notificationsActive,
-                action: { model.setNotificationsEnabled(!model.notificationsEnabled) })
+                // WICHTIG: Negation des SICHTBAREN Zustands (notificationsActive), nicht des
+                // gespeicherten Wunsches — sonst schaltet der erste Klick bei fehlender
+                // System-Erlaubnis nur den Wunsch aus und „nichts passiert".
+                action: { model.setNotificationsEnabled(!model.notificationsActive) })
             toggle(
                 L10n.t("show_email"), isOn: model.showEmail,
                 action: { model.setShowEmail(!model.showEmail) })
@@ -214,7 +217,13 @@ struct MenuContent: View {
             Button("CleverSwitch \(cleverSwitchVersion)") {
                 NSWorkspace.shared.open(UpdateChecker.releasesPage)
             }
-            Button(L10n.t("check_updates")) { model.checkForUpdateNow() }
+            if model.showUpToDate {
+                // Nach manueller Prüfung ohne Fund: Zustand statt Dauer-Statusmeldung —
+                // verschwindet mit dem nächsten 6-h-Fenster von selbst.
+                Label(L10n.t("up_to_date"), systemImage: "checkmark.seal")
+            } else {
+                Button(L10n.t("check_updates")) { model.checkForUpdateNow() }
+            }
         } label: {
             Label(L10n.t("settings"), systemImage: "gearshape")
         }

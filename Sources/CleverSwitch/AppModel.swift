@@ -23,6 +23,8 @@ final class AppModel {
     /// gespeicherten Wunsch (`notificationsEnabled`) zu `notificationsActive` kombiniert, damit
     /// das Häkchen nicht „lügt", wenn die Berechtigung in den Systemeinstellungen entzogen wurde.
     private(set) var notificationsAuthorized: Bool = true
+    /// True genau dann, wenn beim Start noch keine state.json existierte (allererster Start).
+    private let isFirstLaunch: Bool
 
     let providers: [AccountProvider]
     private let store: StateStore
@@ -50,6 +52,10 @@ final class AppModel {
         self.credentials = credentials
         self.http = http
         self.providers = providers
+        // VOR dem ersten persist() festhalten, ob das ein allererster Start ist
+        // (state.json existiert noch nicht) — Trigger für das Onboarding.
+        let firstLaunch = !FileManager.default.fileExists(atPath: store.url.path)
+        self.isFirstLaunch = firstLaunch
         self.state = store.load()
         // Benachrichtigungs-Berechtigung früh anfragen, wenn aktiviert (sonst erscheint die
         // Nachfrage nie und Notifications bleiben still — genau das ist Theo passiert).
@@ -62,9 +68,10 @@ final class AppModel {
         Task {
             await self.detectCLIs()  // früh, damit das Onboarding den CLI-Status zeigen kann
             await self.reconcileLiveIdentities()
-            // Erster Start ohne Accounts (auch nach Reconcile-Import noch leer) -> geführte
-            // Ersteinrichtung SOFORT zeigen, nicht erst nach dem mehrsekündigen Usage-Fetch.
-            if self.state.accounts.isEmpty {
+            // Allererster Start ODER (noch) keine Accounts -> geführte Ersteinrichtung
+            // SOFORT zeigen, nicht erst nach dem mehrsekündigen Usage-Fetch. Auto-importierte
+            // CLI-Logins (Reconcile) zählen nicht als „kennt die App schon".
+            if self.isFirstLaunch || self.state.accounts.isEmpty {
                 OnboardingWindow.show(model: self)
             }
             await self.refreshUsage()
@@ -576,12 +583,23 @@ final class AppModel {
         }
     }
 
-    /// Manuelle Prüfung (Einstellungen) — meldet auch „du bist aktuell".
+    /// Bis wann „auf dem neuesten Stand" angezeigt wird (gesetzt nach manueller Prüfung
+    /// ohne Fund; läuft mit dem nächsten 6-h-Fenster ab).
+    private(set) var upToDateUntil: Date?
+    var showUpToDate: Bool {
+        _ = clockTick  // Minuten-Tick als Abhängigkeit, damit der Zustand von selbst abläuft
+        guard updateAvailable == nil, let until = upToDateUntil else { return false }
+        return until > Date()
+    }
+
+    /// Manuelle Prüfung (Einstellungen) — zeigt danach „auf dem neuesten Stand" im Menü.
     func checkForUpdateNow() {
         lastUpdateCheckAt = nil
         Task {
             await checkForUpdateIfDue()
-            if updateAvailable == nil { statusMessage = L10n.t("up_to_date") }
+            if updateAvailable == nil {
+                upToDateUntil = Date().addingTimeInterval(Self.updateCheckInterval)
+            }
         }
     }
 
@@ -648,6 +666,11 @@ final class AppModel {
         do {
             if enabled {
                 try SMAppService.mainApp.register()
+                // macOS kann die Freigabe verlangen (z.B. nach Neuinstallation) — dann den
+                // Anmeldeobjekte-Bereich öffnen, statt dass „nichts passiert".
+                if SMAppService.mainApp.status == .requiresApproval {
+                    SMAppService.openSystemSettingsLoginItems()
+                }
             } else {
                 try SMAppService.mainApp.unregister()
             }
