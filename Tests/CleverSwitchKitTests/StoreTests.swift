@@ -29,10 +29,12 @@ struct StoreTests {
         settings.modes["claude"] = .balance
         let state = PersistedState(
             accounts: [
-                Account(provider: "claude", handle: "a@x.com", label: "max", active: true,
-                        credentialKey: "claude:a@x.com"),
-                Account(provider: "claude", handle: "b@x.com", label: "max",
-                        credentialKey: "claude:b@x.com"),
+                Account(
+                    provider: "claude", handle: "a@x.com", label: "max", active: true,
+                    credentialKey: "claude:a@x.com"),
+                Account(
+                    provider: "claude", handle: "b@x.com", label: "max",
+                    credentialKey: "claude:b@x.com"),
             ],
             settings: settings
         )

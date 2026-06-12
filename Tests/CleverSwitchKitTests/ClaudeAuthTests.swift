@@ -9,7 +9,9 @@ private struct FakeHTTPClient: HTTPClient {
     func send(_ request: URLRequest) async throws -> HTTPResponse { response }
 }
 
-private func blob(accessToken: String = "old-access", refreshToken: String = "old-refresh", expiresAtMillis: Double) -> String {
+private func blob(accessToken: String = "old-access", refreshToken: String = "old-refresh", expiresAtMillis: Double)
+    -> String
+{
     """
     {"claudeAiOauth":{"accessToken":"\(accessToken)","refreshToken":"\(refreshToken)","expiresAt":\(Int(expiresAtMillis)),"subscriptionType":"max","rateLimitTier":"keep-me"}}
     """

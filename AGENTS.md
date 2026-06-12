@@ -37,6 +37,7 @@ die zwei reale Datenverlust-Bugs beendet haben — beim Ändern Tests lesen:
 
 ```bash
 swift build && swift test        # Pflicht vor jedem „fertig"; 0 Warnungen ist der Standard
+swift format lint --strict --recursive Sources Tests   # Lint (Konfig: .swift-format), läuft auch in CI
 bash packaging/assemble-app.sh   # baut dist/CleverSwitch.app (Version aus Version.swift)
 codesign --verify --deep --strict dist/CleverSwitch.app   # Pflicht (Skript strippt iCloud-xattrs)
 ```

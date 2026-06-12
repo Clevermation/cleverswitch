@@ -60,7 +60,9 @@ public struct PersistedState: Codable, Equatable, Sendable {
     public var accounts: [Account]
     public var settings: AppSettings
 
-    public init(version: Int = StateStore.schemaVersion, accounts: [Account] = [], settings: AppSettings = AppSettings()) {
+    public init(
+        version: Int = StateStore.schemaVersion, accounts: [Account] = [], settings: AppSettings = AppSettings()
+    ) {
         self.version = version
         self.accounts = accounts
         self.settings = settings
@@ -89,7 +91,8 @@ public struct StateStore: Sendable {
 
     /// Standard-Speicherort: ~/Library/Application Support/CleverSwitch/state.json
     public static func defaultURL(fileManager: FileManager = .default) -> URL {
-        let base = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+        let base =
+            fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? fileManager.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support")
         return base.appendingPathComponent("CleverSwitch/state.json")
     }

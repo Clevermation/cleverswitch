@@ -11,7 +11,7 @@ jobs:
   release:
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Xcode 16 wählen (Swift 6)
         run: |
@@ -44,16 +44,37 @@ jobs:
           wait "$APP_PID" 2>/dev/null || true
 
       - name: Zippen (ditto erhält die Bundle-Struktur)
+        id: zip
         run: |
           cd dist
           ditto -c -k --keepParent "CleverSwitch.app" "CleverSwitch-${{ steps.version.outputs.version }}.zip"
           # SHA256 als Datei mitliefern (für den Homebrew-Cask, statt Abschreiben aus dem CI-Log)
           shasum -a 256 *.zip | tee SHA256SUMS.txt
+          echo "sha256=$(shasum -a 256 *.zip | awk '{print $1}')" >> "$GITHUB_OUTPUT" 
 
-      - name: GitHub-Release anlegen
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            dist/*.zip
-            dist/SHA256SUMS.txt
-          generate_release_notes: true
+      - name: GitHub-Release anlegen (gh CLI statt Drittanbieter-Action)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/*.zip dist/SHA256SUMS.txt \
+            --generate-notes --title "$GITHUB_REF_NAME"
+
+      - name: Homebrew-Cask automatisch bumpen (optional — braucht TAP_PUSH_TOKEN-Secret)
+        env:
+          TAP_TOKEN: ${{ secrets.TAP_PUSH_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+          SHA256: ${{ steps.zip.outputs.sha256 }}
+        run: |
+          if [ -z "$TAP_TOKEN" ]; then
+            echo "Kein TAP_PUSH_TOKEN-Secret gesetzt — Cask bitte manuell bumpen:"
+            echo "  version \"$VERSION\" / sha256 \"$SHA256\""
+            exit 0
+          fi
+          git clone "https://x-access-token:${TAP_TOKEN}@github.com/Clevermation/homebrew-tap.git" tap
+          cd tap
+          sed -i '' -E "s/version \"[0-9.]+\"/version \"$VERSION\"/" Casks/cleverswitch.rb
+          sed -i '' -E "s/sha256 \"[a-f0-9]+\"/sha256 \"$SHA256\"/" Casks/cleverswitch.rb
+          git config user.name "cleverswitch-release"
+          git config user.email "noreply@clevermation.com"
+          git commit -am "cleverswitch $VERSION"
+          git push

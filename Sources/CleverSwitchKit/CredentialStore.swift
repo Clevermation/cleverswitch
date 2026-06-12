@@ -95,7 +95,8 @@ public struct SecurityCLICredentialStore: CredentialStore {
 
     /// Quotet einen String für den security-Kommandozeilen-Parser (interactive mode).
     private static func quoted(_ value: String) -> String {
-        let escaped = value
+        let escaped =
+            value
             .replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "\"", with: "\\\"")
         return "\"\(escaped)\""

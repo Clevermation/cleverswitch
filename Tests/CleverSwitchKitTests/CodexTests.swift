@@ -17,7 +17,8 @@ private func fakeJWT(payload: [String: Any]) -> String {
 }
 
 private func codexBlob(email: String = "dev@x.com", plan: String = "prolite", accountID: String? = "acc-1")
-    -> String {
+    -> String
+{
     var authClaim: [String: Any] = ["chatgpt_plan_type": plan]
     if let accountID { authClaim["chatgpt_account_id"] = accountID }
     let jwt = fakeJWT(payload: ["email": email, "https://api.openai.com/auth": authClaim])

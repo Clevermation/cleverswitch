@@ -117,7 +117,8 @@ public enum CodexAuth {
         case 400, 401:
             let body = String(data: response.body, encoding: .utf8) ?? ""
             if body.contains("invalid_grant") || body.contains("already been used")
-                || body.contains("token_invalidated") {
+                || body.contains("token_invalidated")
+            {
                 throw CredentialsExpiredError()
             }
             throw TransientRefreshError(status: response.status)

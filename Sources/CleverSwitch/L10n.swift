@@ -150,7 +150,8 @@ enum L10n {
             "onboarding_account_sub": "Dein Browser öffnet sich gleich — wir übernehmen den Rest.",
             "onboarding_waiting": "Warte auf deinen Browser…",
             "onboarding_aha_title": "Das ist dein Live-Verbrauch.",
-            "onboarding_aha_sub": "Ab jetzt siehst du jederzeit, wie viel Kontingent übrig ist — direkt in der Menüleiste.",
+            "onboarding_aha_sub":
+                "Ab jetzt siehst du jederzeit, wie viel Kontingent übrig ist — direkt in der Menüleiste.",
             "onboarding_add_more": "Weiteren Account hinzufügen",
             "onboarding_perm_title": "Noch zwei Kleinigkeiten",
             "onboarding_perm_notif": "Wir sagen dir Bescheid, bevor ein Limit dich ausbremst.",
@@ -217,7 +218,8 @@ enum L10n {
             "onboarding_account_sub": "Votre navigateur va s'ouvrir — on s'occupe du reste.",
             "onboarding_waiting": "En attente de votre navigateur…",
             "onboarding_aha_title": "Voici votre utilisation en direct.",
-            "onboarding_aha_sub": "Désormais, vous savez à tout moment combien de quota il vous reste — directement dans la barre des menus.",
+            "onboarding_aha_sub":
+                "Désormais, vous savez à tout moment combien de quota il vous reste — directement dans la barre des menus.",
             "onboarding_add_more": "Ajouter un autre compte",
             "onboarding_perm_title": "Deux dernières petites choses",
             "onboarding_perm_notif": "On vous prévient avant qu'une limite ne vous freine.",
@@ -284,11 +286,13 @@ enum L10n {
             "onboarding_account_sub": "Se abrirá tu navegador — nosotros nos encargamos del resto.",
             "onboarding_waiting": "Esperando a tu navegador…",
             "onboarding_aha_title": "Este es tu uso en tiempo real.",
-            "onboarding_aha_sub": "A partir de ahora sabrás en todo momento cuánta cuota te queda — directamente en tu barra de menús.",
+            "onboarding_aha_sub":
+                "A partir de ahora sabrás en todo momento cuánta cuota te queda — directamente en tu barra de menús.",
             "onboarding_add_more": "Añadir otra cuenta",
             "onboarding_perm_title": "Dos cositas más",
             "onboarding_perm_notif": "Te avisaremos antes de que un límite te frene.",
-            "onboarding_perm_launch": "CleverSwitch se inicia discretamente con tu Mac — no tendrás que volver a pensar en ello.",
+            "onboarding_perm_launch":
+                "CleverSwitch se inicia discretamente con tu Mac — no tendrás que volver a pensar en ello.",
             "onboarding_done_title": "Ya estás dentro.",
             "onboarding_done_sub": "CleverSwitch vive ahora aquí arriba.",
         ],
@@ -351,7 +355,8 @@ enum L10n {
             "onboarding_account_sub": "Si aprirà il browser — al resto pensiamo noi.",
             "onboarding_waiting": "In attesa del browser…",
             "onboarding_aha_title": "Questo è il tuo utilizzo in tempo reale.",
-            "onboarding_aha_sub": "D'ora in poi saprai sempre quanta quota ti resta — direttamente nella barra dei menu.",
+            "onboarding_aha_sub":
+                "D'ora in poi saprai sempre quanta quota ti resta — direttamente nella barra dei menu.",
             "onboarding_add_more": "Aggiungi un altro account",
             "onboarding_perm_title": "Due ultime cosette",
             "onboarding_perm_notif": "Ti avvisiamo prima che un limite ti rallenti.",
@@ -418,11 +423,13 @@ enum L10n {
             "onboarding_account_sub": "Seu navegador vai abrir — nós cuidamos do resto.",
             "onboarding_waiting": "Aguardando seu navegador…",
             "onboarding_aha_title": "Este é o seu uso ao vivo.",
-            "onboarding_aha_sub": "A partir de agora você sempre sabe quanta cota ainda resta — direto na barra de menus.",
+            "onboarding_aha_sub":
+                "A partir de agora você sempre sabe quanta cota ainda resta — direto na barra de menus.",
             "onboarding_add_more": "Adicionar outra conta",
             "onboarding_perm_title": "Duas coisinhas rápidas",
             "onboarding_perm_notif": "Avisamos você antes que um limite atrapalhe.",
-            "onboarding_perm_launch": "O CleverSwitch inicia discretamente com o seu Mac — você nunca precisa pensar nisso.",
+            "onboarding_perm_launch":
+                "O CleverSwitch inicia discretamente com o seu Mac — você nunca precisa pensar nisso.",
             "onboarding_done_title": "Você entrou.",
             "onboarding_done_sub": "O CleverSwitch agora mora aqui em cima.",
         ],
@@ -556,7 +563,8 @@ enum L10n {
             "onboarding_add_more": "Dodaj kolejne konto",
             "onboarding_perm_title": "Jeszcze dwa drobiazgi",
             "onboarding_perm_notif": "Ostrzeżemy Cię, zanim limit Cię przyhamuje.",
-            "onboarding_perm_launch": "CleverSwitch startuje po cichu razem z Twoim Makiem — nie musisz o nim pamiętać.",
+            "onboarding_perm_launch":
+                "CleverSwitch startuje po cichu razem z Twoim Makiem — nie musisz o nim pamiętać.",
             "onboarding_done_title": "Jesteś w grze.",
             "onboarding_done_sub": "CleverSwitch mieszka od teraz tutaj, na górze.",
         ],
@@ -690,7 +698,8 @@ enum L10n {
             "onboarding_add_more": "Tilføj endnu en konto",
             "onboarding_perm_title": "To små ting til sidst",
             "onboarding_perm_notif": "Vi siger til, før en grænse bremser dig.",
-            "onboarding_perm_launch": "CleverSwitch starter stille og roligt med din Mac — du behøver aldrig tænke på det.",
+            "onboarding_perm_launch":
+                "CleverSwitch starter stille og roligt med din Mac — du behøver aldrig tænke på det.",
             "onboarding_done_title": "Du er inde.",
             "onboarding_done_sub": "CleverSwitch bor heroppe nu.",
         ],
@@ -753,11 +762,13 @@ enum L10n {
             "onboarding_account_sub": "Selaimesi avautuu kohta — me hoidamme loput.",
             "onboarding_waiting": "Odotetaan selaintasi…",
             "onboarding_aha_title": "Tämä on käyttösi reaaliajassa.",
-            "onboarding_aha_sub": "Tästä lähtien tiedät aina, paljonko kiintiötä on jäljellä — suoraan valikkorivilläsi.",
+            "onboarding_aha_sub":
+                "Tästä lähtien tiedät aina, paljonko kiintiötä on jäljellä — suoraan valikkorivilläsi.",
             "onboarding_add_more": "Lisää toinen tili",
             "onboarding_perm_title": "Vielä kaksi pikkujuttua",
             "onboarding_perm_notif": "Varoitamme sinua, ennen kuin raja hidastaa menoa.",
-            "onboarding_perm_launch": "CleverSwitch käynnistyy hiljaa Macisi mukana — sinun ei tarvitse koskaan ajatella sitä.",
+            "onboarding_perm_launch":
+                "CleverSwitch käynnistyy hiljaa Macisi mukana — sinun ei tarvitse koskaan ajatella sitä.",
             "onboarding_done_title": "Olet sisällä.",
             "onboarding_done_sub": "CleverSwitch asuu nyt täällä ylhäällä.",
         ],
@@ -891,7 +902,8 @@ enum L10n {
             "onboarding_add_more": "Başka bir hesap ekle",
             "onboarding_perm_title": "Son iki küçük şey",
             "onboarding_perm_notif": "Bir limit sizi yavaşlatmadan önce haber veririz.",
-            "onboarding_perm_launch": "CleverSwitch, Mac'inizle birlikte sessizce başlar — bir daha düşünmeniz gerekmez.",
+            "onboarding_perm_launch":
+                "CleverSwitch, Mac'inizle birlikte sessizce başlar — bir daha düşünmeniz gerekmez.",
             "onboarding_done_title": "Artık içerdesiniz.",
             "onboarding_done_sub": "CleverSwitch artık burada, yukarıda yaşıyor.",
         ],

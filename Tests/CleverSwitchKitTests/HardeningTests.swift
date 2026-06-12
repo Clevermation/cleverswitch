@@ -35,7 +35,9 @@ struct ValidationTests {
 struct AppSettingsDecodeTests {
     @Test("alte settings ohne neue Felder -> Defaults (Notifications an, E-Mail an)")
     func decodesLegacy() throws {
-        let json = Data(#"{"modes":{"claude":"failover"},"policy":{"failoverSessionAt":85,"failoverWeeklyAt":92,"targetSessionMax":70,"targetWeeklyMax":90,"balanceMinGap":12,"balanceCeiling":85}}"#.utf8)
+        let json = Data(
+            #"{"modes":{"claude":"failover"},"policy":{"failoverSessionAt":85,"failoverWeeklyAt":92,"targetSessionMax":70,"targetWeeklyMax":90,"balanceMinGap":12,"balanceCeiling":85}}"#
+                .utf8)
         let settings = try JSONDecoder().decode(AppSettings.self, from: json)
         #expect(settings.mode(for: "claude") == .failover)
         #expect(settings.notificationsEnabled == true)
