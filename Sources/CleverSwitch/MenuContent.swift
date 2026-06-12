@@ -44,10 +44,16 @@ struct MenuContent: View {
         Button {
             model.forceRefresh()
         } label: {
-            Label(L10n.t("refresh_usage"), systemImage: "arrow.clockwise")
-        }
-        if let updated = model.lastUpdatedText {
-            Text(updated).foregroundStyle(.secondary)
+            // „Aktualisiert vor X" direkt hinter dem Titel (eine Zeile statt eigener Reihe).
+            Label {
+                if let updated = model.lastUpdatedText {
+                    Text(L10n.t("refresh_usage")) + Text("  ·  \(updated)").foregroundStyle(.secondary)
+                } else {
+                    Text(L10n.t("refresh_usage"))
+                }
+            } icon: {
+                Image(systemName: "arrow.clockwise")
+            }
         }
 
         // Account hinzufügen — ein Eintrag mit Anbieter-Auswahl (Claude Code / Codex CLI).

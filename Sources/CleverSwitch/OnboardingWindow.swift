@@ -223,12 +223,18 @@ private struct OnboardingView: View {
                 permissionCard(
                     symbol: "bell.badge",
                     text: L10n.t("onboarding_perm_notif"),
+                    // Wurde die Berechtigung früher abgelehnt, kann macOS keinen Dialog mehr
+                    // zeigen — dann öffnen sich die Systemeinstellungen und dieser Hinweis
+                    // erklärt, was dort zu tun ist.
+                    hint: model.notificationsEnabled && !model.notificationsAuthorized
+                        ? L10n.t("notif_denied_hint") : nil,
                     isOn: Binding(
                         get: { model.notificationsActive },
                         set: { model.setNotificationsEnabled($0) }))
                 permissionCard(
                     symbol: "arrow.clockwise.circle",
                     text: L10n.t("onboarding_perm_launch"),
+                    hint: nil,
                     isOn: Binding(
                         get: { model.launchAtLogin },
                         set: { model.setLaunchAtLogin($0) }))
@@ -236,14 +242,32 @@ private struct OnboardingView: View {
             .frame(maxWidth: 420)
             continueButton { advance(.finale) }
         }
+        // Solange dieser Schritt offen ist, den System-Status alle 2 s abgleichen — der
+        // Toggle springt dann von allein um, sobald die Berechtigung erteilt wurde.
+        .task {
+            while !Task.isCancelled {
+                model.syncNotifications()
+                try? await Task.sleep(for: .seconds(2))
+            }
+        }
     }
 
-    private func permissionCard(symbol: String, text: String, isOn: Binding<Bool>) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: symbol).font(.title2).frame(width: 34)
-            Text(text).font(.callout).fixedSize(horizontal: false, vertical: true)
-            Spacer()
-            Toggle("", isOn: isOn).toggleStyle(.switch).labelsHidden()
+    private func permissionCard(
+        symbol: String, text: String, hint: String?, isOn: Binding<Bool>
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 12) {
+                Image(systemName: symbol).font(.title2).frame(width: 34)
+                Text(text).font(.callout).fixedSize(horizontal: false, vertical: true)
+                Spacer()
+                Toggle("", isOn: isOn).toggleStyle(.switch).labelsHidden()
+            }
+            if let hint {
+                Text(hint)
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .padding(.leading, 46)
+            }
         }
         .padding(14)
         .background(RoundedRectangle(cornerRadius: 14).fill(.white.opacity(0.08)))
