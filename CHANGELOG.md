@@ -4,6 +4,10 @@ Alle nennenswerten Änderungen an CleverSwitch.
 
 ## [0.1.3] – 2026-06-12
 
+- **KRITISCH: Token-Vermischung behoben** — nach einem Account-Neulogin konnten beide Accounts denselben Token (und damit identische Usage) zeigen. Ursache: die Keychain-Dedupe wählte nach spätestem Ablaufdatum statt nach dem neuesten Eintrag; ein frisch refreshter Token des anderen Accounts gewann dann fälschlich. Dreifach abgesichert: Dedupe behält den zuletzt angelegten Eintrag · Switch sichert den Live-Slot nur noch, wenn er laut Identität wirklich dem bisherigen Account gehört · spät eintreffende Token-Refreshes werden nach dem aktuellen (nicht dem alten) Aktiv-Zustand geroutet.
+- **Update-Check eingebaut**: prüft alle 6 h die GitHub-Releases; „Update X verfügbar – jetzt installieren" oben im Menü installiert per `brew upgrade` und startet die App neu (Fallback: Releases-Seite). Manuell: Einstellungen → „Nach Updates suchen".
+- **Geführte Ersteinrichtung**: beim ersten Start ohne Accounts öffnet sich ein Onboarding-Fenster (CLI-Status mit Install-Links → Accounts hinzufügen → Einstellungen & Berechtigungen). Fehlt eine CLI, zeigt auch das Menü direkt „CLI nicht gefunden – installieren…".
+- **CI-Launch-Smoke-Test**: jedes Release startet die gebaute App 5 s lang — fängt Crash-at-Launch-Fehler, die Unit-Tests nie sehen.
 - **Farbige Usage-Zahlen** statt Emoji: die Prozent-Werte sind je nach Auslastung grün (< 60 %), orange (< 85 %) oder rot eingefärbt.
 - **Ausgerichtete Usage-Spalten**: Abo · Session · Woche stehen über alle Accounts sauber untereinander (monospaced, dynamische Spaltenbreite).
 - **Menüleisten-Zahl wählbar**: Höchste (alle) / nur Claude Code / nur Codex CLI (Einstellungen → „Menüleisten-Zahl"); fällt automatisch auf „alle" zurück, wenn die Quelle leer ist.

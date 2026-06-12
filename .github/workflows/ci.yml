@@ -21,3 +21,10 @@ jobs:
         run: swift test
       - name: Assemble .app (Smoke-Test)
         run: zsh packaging/assemble-app.sh 0.0.0-ci
+      - name: Launch-Smoke-Test (App startet und lebt 5 s)
+        run: |
+          ./dist/CleverSwitch.app/Contents/MacOS/CleverSwitch &
+          APP_PID=$!
+          sleep 5
+          kill -0 "$APP_PID"  # lebt der Prozess noch? (faengt dyld-/Crash-at-Launch-Fehler)
+          kill "$APP_PID" 

@@ -49,6 +49,14 @@ struct SwitchServiceTests {
 
     @Test("sichert den aktiven Account und aktiviert das gültige Ziel")
     func activatesValidTarget() async throws {
+        // Eigene claude.json: der Identitäts-Guard sichert nur, wenn die Live-Identität
+        // wirklich dem bisher aktiven Account gehört.
+        let stateFile = FileManager.default.temporaryDirectory
+            .appendingPathComponent("cleverswitch-claude-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: stateFile) }
+        try Data(#"{"oauthAccount":{"emailAddress":"a@x.com"}}"#.utf8).write(to: stateFile)
+        let provider = ClaudeProvider(stateFile: stateFile)
+
         let store = MemStore()
         store.seed(service: provider.liveCredentialService, secret: "CURRENT-LIVE")
         store.seed(service: provider.snapshotService(handle: "b@x.com"), secret: futureBlob)

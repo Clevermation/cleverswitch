@@ -22,13 +22,19 @@ public enum SwitchService {
         credentials: CredentialStore,
         http: HTTPClient
     ) async throws {
-        // 1. Aktuellen Live-Slot sichern (frische Creds des bisher aktiven Accounts).
+        // 1. Aktuellen Live-Slot sichern (frische Creds des bisher aktiven Accounts) —
+        //    aber NUR, wenn der Live-Slot laut Anbieter-Identität wirklich diesem Account
+        //    gehört. Sonst würde ein fremder Token in den falschen Snapshot kopiert und
+        //    der Fehler bei jedem weiteren Switch zementiert (Token-Vermischungs-Bug).
         if let current, let liveBlob = provider.readLive(credentials: credentials) {
-            try credentials.write(
-                service: provider.snapshotService(handle: current.handle),
-                account: current.handle,
-                secret: liveBlob
-            )
+            let liveIdentity = provider.currentIdentity(credentials: credentials)
+            if liveIdentity == nil || liveIdentity?.handle == current.handle {
+                try credentials.write(
+                    service: provider.snapshotService(handle: current.handle),
+                    account: current.handle,
+                    secret: liveBlob
+                )
+            }
         }
 
         // 2. Ziel-Snapshot lesen.

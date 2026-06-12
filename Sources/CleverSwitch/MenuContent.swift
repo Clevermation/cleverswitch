@@ -7,6 +7,19 @@ struct MenuContent: View {
     let model: AppModel
 
     var body: some View {
+        // Update verfügbar -> prominent ganz oben (Installation läuft über brew + Neustart).
+        if let version = model.updateAvailable {
+            Button {
+                model.installUpdate()
+            } label: {
+                Label(
+                    L10n.t("update_available", version),
+                    systemImage: "arrow.down.circle.fill")
+            }
+            .disabled(model.updateInProgress)
+            Divider()
+        }
+
         ForEach(model.providers, id: \.id) { provider in
             Section(provider.displayName) {
                 accountRows(for: provider)
@@ -61,6 +74,15 @@ struct MenuContent: View {
             }
         }
 
+        // Ersteinrichtung anbieten, solange noch gar kein Account existiert.
+        if model.providers.allSatisfy({ model.accounts(for: $0).isEmpty }) {
+            Button {
+                OnboardingWindow.show(model: model)
+            } label: {
+                Label(L10n.t("open_onboarding"), systemImage: "sparkles")
+            }
+        }
+
         settingsMenu
 
         if let message = model.statusMessage {
@@ -85,7 +107,16 @@ struct MenuContent: View {
         // die Ausrichtung sobald ein Plan-Name länger als 4 Zeichen ist (z.B. "Team").
         let labelWidth = max(4, accounts.map(\.label.count).max() ?? 4)
         if accounts.isEmpty {
-            Label(L10n.t("no_accounts"), systemImage: "person.crop.circle.badge.questionmark")
+            // Onboarding light direkt im Menü: fehlt die CLI, Install-Link statt totem Hinweis.
+            if model.cliFound[provider.id] == false {
+                Button {
+                    NSWorkspace.shared.open(provider.installURL)
+                } label: {
+                    Label(L10n.t("cli_missing_install"), systemImage: "arrow.down.circle")
+                }
+            } else {
+                Label(L10n.t("no_accounts"), systemImage: "person.crop.circle.badge.questionmark")
+            }
         } else {
             ForEach(accounts, id: \.id) { account in
                 Button {
@@ -167,6 +198,12 @@ struct MenuContent: View {
                     Label(L10n.t("menubar_source"), systemImage: "number")
                 }
             }
+            Divider()
+            // Version + manuelle Update-Prüfung.
+            Button("CleverSwitch \(cleverSwitchVersion)") {
+                NSWorkspace.shared.open(UpdateChecker.releasesPage)
+            }
+            Button(L10n.t("check_updates")) { model.checkForUpdateNow() }
         } label: {
             Label(L10n.t("settings"), systemImage: "gearshape")
         }

@@ -78,6 +78,8 @@ public protocol AccountProvider: Sendable {
     func didActivate(account: Account)
     /// Interaktiver CLI-Login-Befehl (wird headless mit Pseudo-TTY ausgeführt), oder nil.
     func loginCommand() -> [String]?
+    /// Installations-Seite der CLI (fürs Onboarding, wenn die CLI fehlt).
+    var installURL: URL { get }
 }
 
 extension AccountProvider {
@@ -85,6 +87,7 @@ extension AccountProvider {
     public var weeklyWindowLabel: String { "7d" }
     /// Default: nichts zu bereinigen (z.B. bei Datei-basiertem Live-Slot wie Codex).
     public func consolidateLive(credentials: CredentialStore) {}
+    public var installURL: URL { URL(string: "https://github.com/Clevermation/cleverswitch#requirements")! }
 }
 
 // MARK: - Claude Code
@@ -93,12 +96,16 @@ public struct ClaudeProvider: AccountProvider {
     public let id = "claude"
     public let displayName = "Claude Code"
     public let liveCredentialService = "Claude Code-credentials"
+    public var installURL: URL { URL(string: "https://claude.com/claude-code")! }
 
-    private var claudeStateFile: URL {
-        FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".claude.json")
+    // Injizierbar für Tests — produktiv immer ~/.claude.json.
+    private let claudeStateFile: URL
+
+    public init(stateFile: URL? = nil) {
+        self.claudeStateFile =
+            stateFile
+            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".claude.json")
     }
-
-    public init() {}
 
     public func snapshotService(handle: String) -> String {
         "cleverswitch:claude:\(handle)"
@@ -154,20 +161,25 @@ public struct ClaudeProvider: AccountProvider {
     }
 
     public func consolidateLive(credentials: CredentialStore) {
-        // Alle Einträge des Live-Service draften (read+delete enumeriert sie) und den frischesten
-        // Token (höchstes expiresAt) als EINZIGEN wieder schreiben. Cap gegen Endlosschleife.
-        var entries: [(account: String, secret: String, expiresAt: Double)] = []
+        // Alle Einträge des Live-Service draften (read+delete enumeriert sie ÄLTESTE zuerst —
+        // genau deshalb lieferte `security -w` nach einem Login den alten, abgelaufenen Token)
+        // und den NEUESTEN (zuletzt angelegten) als einzigen wieder schreiben.
+        //
+        // WICHTIG: Auswahl nach Anlage-Reihenfolge, NICHT nach höchstem expiresAt — ein frisch
+        // refreshter Token eines ANDEREN Accounts kann später ablaufen als der brandneue
+        // Login-Token. Mit max(expiresAt) gewann dann der falsche Account und der neue Login
+        // wurde still gelöscht (so entstand der „beide Accounts zeigen dieselbe Usage"-Bug).
+        // Cap gegen Endlosschleife.
+        var entries: [(account: String, secret: String)] = []
         for _ in 0..<10 {
             guard let secret = credentials.read(service: liveCredentialService) else { break }
             let account = credentials.readAccount(service: liveCredentialService) ?? "unknown"
-            // Blobs ohne Zeitstempel ans Ende der Auswahl (-1) statt mit 0 gleichauf —
-            // sonst entscheidet die zufällige Lesereihenfolge.
-            entries.append((account, secret, ClaudeAuth.expiresAtMillis(in: secret) ?? -1))
+            entries.append((account, secret))
             credentials.delete(service: liveCredentialService)
         }
-        guard let freshest = entries.max(by: { $0.expiresAt < $1.expiresAt }) else { return }
+        guard let newest = entries.last else { return }
         try? credentials.write(
-            service: liveCredentialService, account: freshest.account, secret: freshest.secret)
+            service: liveCredentialService, account: newest.account, secret: newest.secret)
     }
 
     public func currentIdentity(credentials: CredentialStore) -> AccountIdentity? {
@@ -234,6 +246,7 @@ public struct ClaudeProvider: AccountProvider {
 
 public struct CodexProvider: AccountProvider {
     public let id = "codex"
+    public var installURL: URL { URL(string: "https://developers.openai.com/codex/cli")! }
     public let displayName = "Codex CLI"
     public let sessionWindowLabel = "1h"
 

@@ -56,6 +56,8 @@ session **automatically before the wall** — so you never get interrupted.
 - **🔒 Privacy-first** — credentials stay in the macOS Keychain / the CLI's own file; the account list holds no secrets. Hide email addresses in one click (great for screen recordings & streams): `you@company.com` → `y•••@c•••.com`.
 - **🌍 16 languages**, automatically following your system language.
 - **⚙️ Settings**: start at login · notifications · show/hide emails · menu bar number source.
+- **⬆️ Built-in update check** — the menu tells you when a new version is out and installs it via Homebrew in one click.
+- **🚀 Guided onboarding** on first launch: CLI detection with install links, adding accounts, permissions.
 
 ## How it works
 

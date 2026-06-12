@@ -60,8 +60,14 @@ final class AppModel {
         // Reconcile + erster Usage-Fetch laufen async: Keychain-Subprozesse (und ein evtl.
         // Keychain-Dialog) dürfen den MainActor beim Start nicht blockieren.
         Task {
+            await self.detectCLIs()  // früh, damit das Onboarding den CLI-Status zeigen kann
             await self.reconcileLiveIdentities()
             await self.refreshUsage()
+            // Erster Start ohne Accounts (auch nach Reconcile-Import noch leer)
+            // -> geführte Ersteinrichtung zeigen.
+            if self.state.accounts.isEmpty {
+                OnboardingWindow.show(model: self)
+            }
         }
         startPolling()
         // Minuten-Tick für die relative „Aktualisiert vor X"-Zeile.
@@ -275,19 +281,27 @@ final class AppModel {
                         ? provider.readLive(credentials: credentials)
                         : credentials.read(service: snapshotService)
                     guard let blob else { return nil }
-                    let outcome = await provider.fetchUsage(
+                    return await provider.fetchUsage(
                         blob: blob, http: http, allowRefresh: allowRefresh)
-                    if let refreshed = outcome.refreshedBlob {
-                        if account.active {
+                }.value
+
+                // Erneuerten Blob nach dem AKTUELLEN Zustand routen, nicht nach dem von vor dem
+                // Fetch: hat der User währenddessen gewechselt, würde der Blob sonst den
+                // Live-Slot des NEUEN aktiven Accounts überschreiben (Token-Vermischung).
+                if let refreshed = outcome?.refreshedBlob,
+                    let nowAccount = state.accounts.first(where: { $0.id == account.id })
+                {
+                    await Task.detached {
+                        if nowAccount.active {
                             try? provider.writeLive(
-                                refreshed, handle: account.handle, credentials: credentials)
+                                refreshed, handle: nowAccount.handle, credentials: credentials)
                         } else {
                             try? credentials.write(
-                                service: snapshotService, account: account.handle, secret: refreshed)
+                                service: provider.snapshotService(handle: nowAccount.handle),
+                                account: nowAccount.handle, secret: refreshed)
                         }
-                    }
-                    return outcome
-                }.value
+                    }.value
+                }
 
                 // Direkt in `usage` schreiben (kein Sammel-Snapshot): parallele Mutationen
                 // wie remove() gehen sonst zwischen den await-Punkten verloren. Wurde der
@@ -325,6 +339,8 @@ final class AppModel {
     private func performRefresh(allowAutoSwitch: Bool) async {
         await fetchAllUsage()
         if allowAutoSwitch { await evaluateAutoSwitch() }
+        await checkForUpdateIfDue()
+        await detectCLIs()
     }
 
     /// Manuelles „Usage aktualisieren": setzt den Refresh-Backoff zurück und holt sofort neu —
@@ -534,6 +550,87 @@ final class AppModel {
         loginProcesses[providerID] = nil
         loginInProgress.remove(providerID)
         statusMessage = error  // nil bei Erfolg/Abbruch -> löscht den „Browser-Tab"-Hinweis
+    }
+
+    // MARK: - Update-Check (GitHub Releases) + brew-Update
+
+    /// Neuere verfügbare Version (z.B. "0.2.0"), oder nil. Gespeichert -> @Observable.
+    private(set) var updateAvailable: String?
+    private(set) var updateInProgress = false
+    private var lastUpdateCheckAt: Date?
+    private static let updateCheckInterval: TimeInterval = 6 * 3600  // 6 h reicht völlig
+
+    /// Prüft höchstens alle 6 h gegen die GitHub-Releases-API (läuft im Poll mit).
+    private func checkForUpdateIfDue() async {
+        if let last = lastUpdateCheckAt, Date().timeIntervalSince(last) < Self.updateCheckInterval {
+            return
+        }
+        lastUpdateCheckAt = Date()
+        let http = self.http
+        let found = await Task.detached {
+            await UpdateChecker.check(current: cleverSwitchVersion, http: http)
+        }.value
+        if let found {
+            updateAvailable = found
+            Log.info("update verfügbar: \(found) (installiert: \(cleverSwitchVersion))")
+        }
+    }
+
+    /// Manuelle Prüfung (Einstellungen) — meldet auch „du bist aktuell".
+    func checkForUpdateNow() {
+        lastUpdateCheckAt = nil
+        Task {
+            await checkForUpdateIfDue()
+            if updateAvailable == nil { statusMessage = L10n.t("up_to_date") }
+        }
+    }
+
+    /// Installiert das Update über Homebrew und startet die App danach neu.
+    /// Schlägt brew fehl (oder ist die App manuell installiert), öffnet die Releases-Seite.
+    func installUpdate() {
+        guard !updateInProgress else { return }
+        updateInProgress = true
+        statusMessage = L10n.t("update_running")
+        Log.info("update gestartet (brew upgrade)")
+        Task {
+            let ok = await Task.detached { () -> Bool in
+                let brew = ["/opt/homebrew/bin/brew", "/usr/local/bin/brew"]
+                    .first { FileManager.default.isExecutableFile(atPath: $0) }
+                guard let brew else { return false }
+                let result = Subprocess.run(
+                    brew, ["upgrade", "--cask", "clevermation/tap/cleverswitch"])
+                if result.status != 0 {
+                    Log.info("brew upgrade fehlgeschlagen: \(result.stderr.prefix(200))")
+                }
+                return result.status == 0
+            }.value
+            if ok {
+                // Neue Version liegt in /Applications -> frische Instanz starten, diese beenden.
+                Log.info("update installiert -> Neustart")
+                let relaunch = Process()
+                relaunch.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+                relaunch.arguments = ["-n", "/Applications/CleverSwitch.app"]
+                try? relaunch.run()
+                NSApplication.shared.terminate(nil)
+            } else {
+                updateInProgress = false
+                statusMessage = L10n.t("update_failed")
+                NSWorkspace.shared.open(UpdateChecker.releasesPage)
+            }
+        }
+    }
+
+    // MARK: - CLI-Erkennung (Onboarding)
+
+    /// Pro Anbieter: ist die CLI installiert? nil = noch nicht geprüft.
+    private(set) var cliFound: [String: Bool] = [:]
+
+    /// Prüft (gecacht, einmal pro Poll) ob die Anbieter-CLIs auffindbar sind.
+    func detectCLIs() async {
+        for provider in providers {
+            let found = await Task.detached { provider.loginCommand() != nil }.value
+            cliFound[provider.id] = found
+        }
     }
 
     // MARK: - Launch at Login
