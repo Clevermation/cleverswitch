@@ -44,6 +44,10 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
+# iCloud-/Finder-xattrs entfernen (lokal hängt der Desktop-Sync Metadaten an,
+# die codesign --strict als "detritus" ablehnt)
+xattr -cr "$APP" 2>/dev/null || true
+
 echo "==> ad-hoc signieren"
 codesign --force --deep -s - "$APP"
 

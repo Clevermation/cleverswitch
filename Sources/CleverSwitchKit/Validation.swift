@@ -15,7 +15,7 @@ public enum AccountHandle {
     }
 
     /// Maskiert eine E-Mail für die Anzeige, ohne sie zu leaken (z.B. für Screen-Recordings):
-    /// "theo@clevermation.com" -> "t•••@c•••.com". Erster Zeichen des lokalen Teils + erster
+    /// "anna@example.com" -> "a•••@e•••.com". Erster Zeichen des lokalen Teils + erster
     /// Domain-Buchstabe + TLD bleiben sichtbar; der Rest wird zu Punkten. Eingaben ohne "@"
     /// werden auf das erste Zeichen + Punkte reduziert.
     public static func masked(_ handle: String) -> String {
