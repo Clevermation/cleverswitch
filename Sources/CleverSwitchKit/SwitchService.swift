@@ -26,15 +26,17 @@ public enum SwitchService {
         //    aber NUR, wenn der Live-Slot laut Anbieter-Identität wirklich diesem Account
         //    gehört. Sonst würde ein fremder Token in den falschen Snapshot kopiert und
         //    der Fehler bei jedem weiteren Switch zementiert (Token-Vermischungs-Bug).
-        if let current, let liveBlob = provider.readLive(credentials: credentials) {
-            let liveIdentity = provider.currentIdentity(credentials: credentials)
-            if liveIdentity == nil || liveIdentity?.handle == current.handle {
-                try credentials.write(
-                    service: provider.snapshotService(handle: current.handle),
-                    account: current.handle,
-                    secret: liveBlob
-                )
-            }
+        if let current, let liveBlob = provider.readLive(credentials: credentials),
+            provider.currentIdentity(credentials: credentials)?.handle == current.handle
+        {
+            // Nur sichern, wenn die Live-Identität BESTÄTIGT diesem Account gehört. Bei
+            // unbekannter Identität (fehlende/korrupte Zustandsdatei) lieber den älteren
+            // Snapshot behalten als einen fremden/kaputten Blob hineinzukopieren.
+            try credentials.write(
+                service: provider.snapshotService(handle: current.handle),
+                account: current.handle,
+                secret: liveBlob
+            )
         }
 
         // 2. Ziel-Snapshot lesen.

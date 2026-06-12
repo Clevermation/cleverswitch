@@ -76,7 +76,8 @@ public protocol AccountProvider: Sendable {
     func currentIdentity(credentials: CredentialStore) -> AccountIdentity?
     /// Nach dem Aktivieren: anbieter-spezifische Sitzungsdaten nachziehen (z.B. ~/.claude.json).
     func didActivate(account: Account)
-    /// Interaktiver CLI-Login-Befehl (wird headless mit Pseudo-TTY ausgeführt), oder nil.
+    /// Login-Befehl, headless als normaler Subprozess ohne TTY ausgeführt (stdin = /dev/null),
+    /// oder nil wenn die CLI nicht installiert ist.
     func loginCommand() -> [String]?
     /// Installations-Seite der CLI (fürs Onboarding, wenn die CLI fehlt).
     var installURL: URL { get }

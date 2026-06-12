@@ -7,7 +7,7 @@ let package = Package(
     targets: [
         // Reine, plattformnahe Logik — ohne UI, frei testbar.
         .target(name: "CleverSwitchKit"),
-        // Die Menüleisten-App (SwiftUI MenuBarExtra). UI folgt in Phase 3.
+        // Menüleisten-App (SwiftUI MenuBarExtra, LSUIElement).
         .executableTarget(
             name: "CleverSwitch",
             dependencies: ["CleverSwitchKit"]

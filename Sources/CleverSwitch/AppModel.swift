@@ -62,12 +62,12 @@ final class AppModel {
         Task {
             await self.detectCLIs()  // früh, damit das Onboarding den CLI-Status zeigen kann
             await self.reconcileLiveIdentities()
-            await self.refreshUsage()
-            // Erster Start ohne Accounts (auch nach Reconcile-Import noch leer)
-            // -> geführte Ersteinrichtung zeigen.
+            // Erster Start ohne Accounts (auch nach Reconcile-Import noch leer) -> geführte
+            // Ersteinrichtung SOFORT zeigen, nicht erst nach dem mehrsekündigen Usage-Fetch.
             if self.state.accounts.isEmpty {
                 OnboardingWindow.show(model: self)
             }
+            await self.refreshUsage()
         }
         startPolling()
         // Minuten-Tick für die relative „Aktualisiert vor X"-Zeile.
@@ -385,7 +385,7 @@ final class AppModel {
             statusMessage = L10n.t("session_expired", displayHandle(handle))
             Notifier.post(
                 L10n.t("notif_session_expired_title"),
-                L10n.t("session_expired", displayHandle(handle)), enabled: notificationsEnabled)
+                L10n.t("session_expired", displayHandle(handle)), enabled: notificationsActive)
             Log.info("switch FEHLER: \(target.provider) \(handle) session expired")
         } catch {
             statusMessage = L10n.t("switch_failed")
@@ -433,7 +433,7 @@ final class AppModel {
                 Notifier.post(
                     L10n.t("notif_switched_title"),
                     "\(provider.displayName): \(displayHandle(target.handle))",
-                    enabled: notificationsEnabled)
+                    enabled: notificationsActive)
                 return  // höchstens ein Auto-Switch pro Durchlauf
             }
             // SPEC F5: Frühwarnung, wenn das aktive Konto nahe am Limit ist und KEIN gesundes
@@ -446,7 +446,7 @@ final class AppModel {
                     Notifier.post(
                         L10n.t("notif_near_limit_title"),
                         L10n.t("near_limit_no_target", displayHandle(active.handle)),
-                        enabled: notificationsEnabled)
+                        enabled: notificationsActive)
                 }
             } else {
                 nearLimitWarned.remove(provider.id)
@@ -505,7 +505,7 @@ final class AppModel {
         statusMessage = L10n.t("login_browser_hint")
         Notifier.post(
             L10n.t("login_title", provider.displayName), L10n.t("login_browser_hint"),
-            enabled: notificationsEnabled)
+            enabled: notificationsActive)
         loginWatchTasks[provider.id] = Task { await watchLogin(for: provider, before: before) }
     }
 
@@ -606,17 +606,23 @@ final class AppModel {
             }.value
             if ok {
                 // Neue Version liegt in /Applications -> frische Instanz starten, diese beenden.
+                // Scheitert der Relaunch-Start, NICHT beenden (sonst ist die App einfach weg).
                 Log.info("update installiert -> Neustart")
                 let relaunch = Process()
                 relaunch.executableURL = URL(fileURLWithPath: "/usr/bin/open")
                 relaunch.arguments = ["-n", "/Applications/CleverSwitch.app"]
-                try? relaunch.run()
-                NSApplication.shared.terminate(nil)
-            } else {
-                updateInProgress = false
+                do {
+                    try relaunch.run()
+                    NSApplication.shared.terminate(nil)
+                } catch {
+                    Log.info("update relaunch FEHLER: \(error)")
+                }
+            }
+            if !ok {
                 statusMessage = L10n.t("update_failed")
                 NSWorkspace.shared.open(UpdateChecker.releasesPage)
             }
+            updateInProgress = false
         }
     }
 
@@ -628,6 +634,9 @@ final class AppModel {
     /// Prüft (gecacht, einmal pro Poll) ob die Anbieter-CLIs auffindbar sind.
     func detectCLIs() async {
         for provider in providers {
+            // Einmal gefunden = fertig (CLIs deinstallieren sich nicht von selbst) — sonst
+            // startet jeder Poll eine zsh-Login-Shell. Nur „fehlt noch" wird erneut geprüft.
+            guard cliFound[provider.id] != true else { continue }
             let found = await Task.detached { provider.loginCommand() != nil }.value
             cliFound[provider.id] = found
         }

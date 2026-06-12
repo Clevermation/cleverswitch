@@ -26,5 +26,11 @@ jobs:
           ./dist/CleverSwitch.app/Contents/MacOS/CleverSwitch &
           APP_PID=$!
           sleep 5
-          kill -0 "$APP_PID"  # lebt der Prozess noch? (faengt dyld-/Crash-at-Launch-Fehler)
-          kill "$APP_PID" 
+          # kill -0 allein reicht nicht: ein gecrashter Prozess bleibt als Zombie sichtbar,
+          # bis der Parent wartet. Deshalb zusätzlich den Exit-Status ernten.
+          if ! kill "$APP_PID" 2>/dev/null; then
+            wait "$APP_PID" || true
+            echo "App ist innerhalb von 5 s gestorben (Exit: $?)"
+            exit 1
+          fi
+          wait "$APP_PID" 2>/dev/null || true
