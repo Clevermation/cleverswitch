@@ -87,6 +87,8 @@ public protocol AccountProvider: Sendable {
     var npmPackage: String { get }
     /// Homebrew-Cask-Token (für den brew-Update-Befehl).
     var brewCask: String { get }
+    /// Keychain-Service des Live-Slots für den Duplikat-Check (nil = kein Keychain-Slot).
+    var liveDuplicateCheckService: String? { get }
 }
 
 extension AccountProvider {
@@ -98,6 +100,7 @@ extension AccountProvider {
     public var cliName: String { id }
     public var npmPackage: String { "" }
     public var brewCask: String { id }
+    public var liveDuplicateCheckService: String? { nil }
 }
 
 // MARK: - Claude Code
@@ -106,6 +109,7 @@ public struct ClaudeProvider: AccountProvider {
     public let id = "claude"
     public let displayName = "Claude Code"
     public let liveCredentialService = "Claude Code-credentials"
+    public var liveDuplicateCheckService: String? { liveCredentialService }
     public var installURL: URL { URL(string: "https://claude.com/claude-code")! }
     public var npmPackage: String { "@anthropic-ai/claude-code" }
     public var brewCask: String { "claude-code" }

@@ -2,6 +2,10 @@
 
 Alle nennenswerten Änderungen an CleverSwitch.
 
+## [0.1.5] – 2026-06-12
+
+- **„Beide Accounts zeigen dieselbe Usage" — zweite Wurzel beseitigt.** Diesmal waren die gespeicherten Tokens korrekt; der Live-Slot (den die CLI selbst beschreibt und bei Logins dupliziert) lieferte beim Abruf kurzzeitig den Token des falschen Accounts. Vier neue Schutzschichten: ① alle App-seitigen Live-Slot-Schreibzugriffe laufen serialisiert durch einen `KeychainGate`-Actor (keine internen Races mehr zwischen Dedupe, Switch und Token-Refresh) · ② der Login-Pfad sichert den bisherigen Account nur noch nach bestätigter Identität (gleicher Guard wie beim Switch) · ③ Live-Duplikate werden bei jedem Poll erkannt (Zählung ohne Secrets) und sofort bereinigt · ④ ein Anomalie-Detektor erkennt byte-identische Usage zweier Accounts desselben Anbieters und misst den aktiven Account dann über seinen account-gepinnten Snapshot nach (ohne Refresh, keine Token-Rotation).
+
 ## [0.1.4] – 2026-06-12
 
 - **Light-Mode-Lesbarkeit** (Theos Fund): die farbigen Usage-Prozente nutzen jetzt dynamische Töne — kräftig-dunkles Grün/Orange/Rot im hellen Modus, leuchtende Systemfarben im dunklen.

@@ -26,17 +26,19 @@ public enum SwitchService {
         //    aber NUR, wenn der Live-Slot laut Anbieter-Identität wirklich diesem Account
         //    gehört. Sonst würde ein fremder Token in den falschen Snapshot kopiert und
         //    der Fehler bei jedem weiteren Switch zementiert (Token-Vermischungs-Bug).
-        if let current, let liveBlob = provider.readLive(credentials: credentials),
-            provider.currentIdentity(credentials: credentials)?.handle == current.handle
-        {
-            // Nur sichern, wenn die Live-Identität BESTÄTIGT diesem Account gehört. Bei
-            // unbekannter Identität (fehlende/korrupte Zustandsdatei) lieber den älteren
-            // Snapshot behalten als einen fremden/kaputten Blob hineinzukopieren.
-            try credentials.write(
-                service: provider.snapshotService(handle: current.handle),
-                account: current.handle,
-                secret: liveBlob
-            )
+        try await KeychainGate.shared.run {
+            if let current, let liveBlob = provider.readLive(credentials: credentials),
+                provider.currentIdentity(credentials: credentials)?.handle == current.handle
+            {
+                // Nur sichern, wenn die Live-Identität BESTÄTIGT diesem Account gehört. Bei
+                // unbekannter Identität (fehlende/korrupte Zustandsdatei) lieber den älteren
+                // Snapshot behalten als einen fremden/kaputten Blob hineinzukopieren.
+                try credentials.write(
+                    service: provider.snapshotService(handle: current.handle),
+                    account: current.handle,
+                    secret: liveBlob
+                )
+            }
         }
 
         // 2. Ziel-Snapshot lesen.
@@ -62,10 +64,14 @@ public enum SwitchService {
         //    DANN den erneuerten Blob in den Snapshot zurückschreiben. Reihenfolge wichtig:
         //    bei einem Crash dazwischen liegt der gültige Token live, nicht nur im Snapshot
         //    (sonst wäre der noch live liegende `current` durch Token-Rotation invalidiert).
-        try provider.writeLive(targetBlob, handle: target.handle, credentials: credentials)
-        if didRefresh {
-            try? credentials.write(
-                service: snapshotService, account: target.handle, secret: targetBlob)
+        let blob = targetBlob
+        let refreshed = didRefresh
+        try await KeychainGate.shared.run {
+            try provider.writeLive(blob, handle: target.handle, credentials: credentials)
+            if refreshed {
+                try? credentials.write(
+                    service: snapshotService, account: target.handle, secret: blob)
+            }
         }
         provider.didActivate(account: target)
     }

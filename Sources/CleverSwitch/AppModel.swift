@@ -203,7 +203,7 @@ final class AppModel {
             let credentials = self.credentials
             // Doppelte Live-Slot-Einträge bereinigen (frischesten Token nach vorne) — sonst liest
             // `security -w` evtl. einen alten, abgelaufenen Token (claude-login-Duplikate).
-            await Task.detached { provider.consolidateLive(credentials: credentials) }.value
+            await Task.detached { await KeychainGate.shared.run { provider.consolidateLive(credentials: credentials) } }.value
             let identity = await Task.detached { provider.currentIdentity(credentials: credentials) }.value
             guard let identity else { continue }
             if state.activeAccount(provider: provider.id)?.handle == identity.handle { continue }
@@ -270,6 +270,27 @@ final class AppModel {
     /// Holt Usage für alle Accounts (OHNE Auto-Switch-Auswertung). Reentrant-sicher: berührt
     /// `refreshTask` nicht und darf daher auch aus dem Switch-Pfad heraus aufgerufen werden.
     private func fetchAllUsage() async {
+        // Live-Slot-Duplikate VOR jedem Durchlauf bereinigen: die CLI legt bei Login (und
+        // teils Refresh) eigene Einträge an — readLive trifft sonst den falschen Zwilling
+        // und der aktive Account zeigt die Usage eines anderen. Erst zählen (dump-keychain,
+        // ohne Secrets), nur bei echten Duplikaten draften: so gibt es im Normalfall kein
+        // Lese-Loch im Live-Slot.
+        for provider in providers {
+            guard let service = provider.liveDuplicateCheckService else { continue }
+            let credentials = self.credentials
+            let duplicates = await Task.detached {
+                Subprocess.run("/usr/bin/security", ["dump-keychain"]).stdout
+                    .components(separatedBy: "\"svce\"<blob>=\"\(service)\"").count - 1
+            }.value
+            if duplicates > 1 {
+                Log.info("live-duplikate (\(provider.id)): \(duplicates) -> consolidate")
+                await Task.detached {
+                    await KeychainGate.shared.run {
+                        provider.consolidateLive(credentials: credentials)
+                    }
+                }.value
+            }
+        }
         var labelUpdates: [(provider: String, handle: String, label: String)] = []
         for provider in providers {
             for account in state.accounts(provider: provider.id) {
@@ -299,13 +320,15 @@ final class AppModel {
                     let nowAccount = state.accounts.first(where: { $0.id == account.id })
                 {
                     await Task.detached {
-                        if nowAccount.active {
-                            try? provider.writeLive(
-                                refreshed, handle: nowAccount.handle, credentials: credentials)
-                        } else {
-                            try? credentials.write(
-                                service: provider.snapshotService(handle: nowAccount.handle),
-                                account: nowAccount.handle, secret: refreshed)
+                        await KeychainGate.shared.run {
+                            if nowAccount.active {
+                                try? provider.writeLive(
+                                    refreshed, handle: nowAccount.handle, credentials: credentials)
+                            } else {
+                                try? credentials.write(
+                                    service: provider.snapshotService(handle: nowAccount.handle),
+                                    account: nowAccount.handle, secret: refreshed)
+                            }
                         }
                     }.value
                 }
@@ -338,9 +361,44 @@ final class AppModel {
             }
             persist()
         }
+        await detectIdenticalUsage()
         lastRefreshAt = Date()
         syncLaunchAtLogin()  // hält das Häkchen aktuell, auch bei Änderung via System Settings
         syncNotifications()  // dito für die Benachrichtigungs-Berechtigung
+    }
+
+    /// Sicherheitsnetz gegen die Token-Vermischungs-Klasse: melden zwei Accounts DESSELBEN
+    /// Anbieters byte-identische Usage (gleiche Prozente UND gleiche resets_at-Strings), hat
+    /// fast sicher der Live-Slot den falschen Token geliefert. Dann wird der AKTIVE Account
+    /// über seinen account-gepinnten SNAPSHOT nachgemessen (ohne Refresh -> keine Rotation,
+    /// gefahrlos) und das Ergebnis übernommen.
+    private func detectIdenticalUsage() async {
+        for provider in providers {
+            let accounts = state.accounts(provider: provider.id)
+            guard accounts.count >= 2,
+                let active = accounts.first(where: \.active),
+                let activeUsage = usage[active.id], activeUsage.known
+            else { continue }
+            let twin = accounts.first {
+                !$0.active && usage[$0.id]?.known == true && usage[$0.id] == activeUsage
+            }
+            guard let twin else { continue }
+            Log.info(
+                "ANOMALIE: identische Usage \(active.handle) vs \(twin.handle) -> Nachmessung über Snapshot")
+            let credentials = self.credentials
+            let http = self.http
+            let handle = active.handle
+            let remeasured: AccountUsage? = await Task.detached {
+                guard
+                    let blob = credentials.read(service: provider.snapshotService(handle: handle))
+                else { return nil }
+                let outcome = await provider.fetchUsage(blob: blob, http: http, allowRefresh: false)
+                return outcome.usage.known ? outcome.usage : nil
+            }.value
+            if let remeasured, state.accounts.contains(where: { $0.id == active.id }) {
+                usage[active.id] = remeasured
+            }
+        }
     }
 
     private func performRefresh(allowAutoSwitch: Bool) async {
@@ -484,10 +542,19 @@ final class AppModel {
 
         let credentials = self.credentials
         let before = state.activeAccount(provider: provider.id)?.handle
-        // Aktiven Account sichern, BEVOR der Login den Live-Slot überschreibt.
-        if let before, let live = provider.readLive(credentials: credentials) {
-            try? credentials.write(
-                service: provider.snapshotService(handle: before), account: before, secret: live)
+        // Aktiven Account sichern, BEVOR der Login den Live-Slot überschreibt — aber nur,
+        // wenn der Live-Slot laut Identität wirklich ihm gehört (gleicher Guard wie beim
+        // Switch; sonst würde ein fremder Token in seinen Snapshot kopiert).
+        if let before, let live = provider.readLive(credentials: credentials),
+            provider.currentIdentity(credentials: credentials)?.handle == before
+        {
+            Task.detached {
+                await KeychainGate.shared.run {
+                    try? credentials.write(
+                        service: provider.snapshotService(handle: before), account: before,
+                        secret: live)
+                }
+            }
         }
 
         let process = LoginProcess()
@@ -538,7 +605,7 @@ final class AppModel {
                 Log.info("login erkannt: \(provider.id) \(identity.handle)")
                 // Der Login hat einen frischen Token-Eintrag angelegt — Duplikate bereinigen,
                 // damit der Live-Slot den NEUEN (gültigen) Token liefert, nicht den alten.
-                await Task.detached { provider.consolidateLive(credentials: credentials) }.value
+                await Task.detached { await KeychainGate.shared.run { provider.consolidateLive(credentials: credentials) } }.value
                 await adopt(identity: identity, for: provider)
                 await refreshUsage()
                 finishLogin(for: provider.id, error: nil)
