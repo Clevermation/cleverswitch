@@ -372,7 +372,8 @@ private struct CLIRow: View {
                     .font(.title3)
                     .transition(.scale.combined(with: .opacity))
                 Text(provider.displayName).font(.headline)
-                Text(found ? L10n.t("cli_found") : L10n.t("cli_not_found"))
+                // Version + Install-Variante zeigen (z.B. "v0.136.0 · bun"), sonst nur gefunden/fehlt.
+                Text(statusText(found: found))
                     .foregroundStyle(.white.opacity(0.6))
                 Spacer()
                 if !found {
@@ -392,6 +393,13 @@ private struct CLIRow: View {
             try? await Task.sleep(for: .seconds(delay))
             withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) { appeared = true }
         }
+    }
+
+    private func statusText(found: Bool) -> String {
+        guard found else { return L10n.t("cli_not_found") }
+        guard let status = model.cliStatus[provider.id], let version = status.installedVersion
+        else { return L10n.t("cli_found") }
+        return "v\(version) · \(status.variant.rawValue)"
     }
 }
 

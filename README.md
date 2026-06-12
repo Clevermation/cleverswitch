@@ -27,18 +27,33 @@ One click to switch the active **Claude Code** or **Codex** session · live usag
 brew install --cask clevermation/tap/cleverswitch
 ```
 
-That's it — the app appears in your menu bar. Update later with `brew upgrade --cask cleverswitch`,
-or remove it with `brew uninstall --cask cleverswitch`.
+The app appears in your menu bar and walks you through setup on first launch.
 
-> No Apple Developer account, no notarization — CleverSwitch is ad-hoc signed and open source.
+> No Apple Developer account, no notarization: CleverSwitch is ad-hoc signed and open source.
 > The Homebrew cask clears the quarantine flag for you, so it just opens.
+
+## Update & uninstall
+
+CleverSwitch checks GitHub for new releases every few hours. When one is out, the menu shows
+an update entry that installs it and restarts the app. It also watches your `claude` and
+`codex` CLIs: if one is outdated, you get a one-click update that uses the right command for
+how that CLI was installed (native installer, npm, bun or Homebrew). Mixing those up by hand
+is a classic way to end up with two competing installations.
+
+Prefer the terminal?
+
+```bash
+brew upgrade   --cask cleverswitch        # update the app
+brew uninstall --cask cleverswitch        # remove the app
+brew uninstall --zap --cask cleverswitch  # remove the app plus local state and logs
+```
 
 ## Why
 
-If you have more than one Claude Max or ChatGPT/Codex subscription, you keep hitting the
-5-hour session wall mid-task and have to log into another account by hand. CleverSwitch keeps
-all your logins ready, shows how close each one is to its limit, and can switch the active CLI
-session **automatically before the wall** — so you never get interrupted.
+If you have more than one Claude Max or ChatGPT/Codex subscription, you know the drill: the
+5-hour session wall hits mid-task and you log into another account by hand. CleverSwitch keeps
+all your logins ready, shows how close each one is to its limit, and switches the active CLI
+session **before** you hit the wall.
 
 ## Features
 
@@ -56,19 +71,19 @@ session **automatically before the wall** — so you never get interrupted.
 - **🔒 Privacy-first** — credentials stay in the macOS Keychain / the CLI's own file; the account list holds no secrets. Hide email addresses in one click (great for screen recordings & streams): `you@company.com` → `y•••@c•••.com`.
 - **🌍 16 languages**, automatically following your system language.
 - **⚙️ Settings**: start at login · notifications · show/hide emails · menu bar number source.
-- **⬆️ Built-in update check** — the menu tells you when a new version is out and installs it via Homebrew in one click.
-- **🚀 Guided onboarding** on first launch: CLI detection with install links, adding accounts, permissions.
+- **⬆️ Built-in update check** — the menu tells you when a new CleverSwitch version is out and installs it via Homebrew in one click.
+- **🧰 CLI updates too** — detects whether `claude`/`codex` came from the native installer, npm, bun or Homebrew, and runs the matching update command when a new CLI version ships.
+- **🚀 Guided onboarding** on first launch: five short steps from hello to your live usage numbers.
 
 ## How it works
 
 Each CLI reads its credentials from exactly one place (Claude: a macOS Keychain entry, Codex:
 `~/.codex/auth.json`). CleverSwitch keeps a copy of every account's token and, when you switch,
-swaps the target account's token into that "live slot" — refreshing it first if needed. The
+swaps the target account's token into that "live slot", refreshing it first if needed. The
 whole decision layer (when and where to auto-switch) is pure, provider-neutral, and unit-tested.
 
-Adding an account runs the official `claude auth login` / `codex login` flow **headless** (no
-terminal window pops up — the browser opens on its own), then imports the new account
-automatically.
+Adding an account runs the official `claude auth login` / `codex login` flow headless: no
+terminal window, the browser opens on its own, and the new account is imported automatically.
 
 ## Requirements
 
@@ -125,4 +140,4 @@ layer in `CleverSwitchKit` is pure and unit-tested, so logic changes come with t
 
 [MIT](LICENSE) — an independent, clean-room implementation. See [`NOTICE`](NOTICE).
 
-<div align="center"><sub>🇩🇪 Made in Germany by <a href="https://clevermation.com"><b>Clevermation</b></a> — your AI-first agency.</sub></div>
+<div align="center"><sub>🇩🇪 Made in Germany by <a href="https://clevermation.com"><b>Clevermation</b></a> · <i>Reclaim your impact.</i></sub></div>

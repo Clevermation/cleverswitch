@@ -81,6 +81,12 @@ public protocol AccountProvider: Sendable {
     func loginCommand() -> [String]?
     /// Installations-Seite der CLI (fürs Onboarding, wenn die CLI fehlt).
     var installURL: URL { get }
+    /// Name des CLI-Binaries (z.B. "claude") — auch der Self-Update-Befehl ("<name> update").
+    var cliName: String { get }
+    /// npm-Paketname (Quelle für den Latest-Versions-Check, alle Varianten synchron).
+    var npmPackage: String { get }
+    /// Homebrew-Cask-Token (für den brew-Update-Befehl).
+    var brewCask: String { get }
 }
 
 extension AccountProvider {
@@ -89,6 +95,9 @@ extension AccountProvider {
     /// Default: nichts zu bereinigen (z.B. bei Datei-basiertem Live-Slot wie Codex).
     public func consolidateLive(credentials: CredentialStore) {}
     public var installURL: URL { URL(string: "https://github.com/Clevermation/cleverswitch#requirements")! }
+    public var cliName: String { id }
+    public var npmPackage: String { "" }
+    public var brewCask: String { id }
 }
 
 // MARK: - Claude Code
@@ -98,6 +107,8 @@ public struct ClaudeProvider: AccountProvider {
     public let displayName = "Claude Code"
     public let liveCredentialService = "Claude Code-credentials"
     public var installURL: URL { URL(string: "https://claude.com/claude-code")! }
+    public var npmPackage: String { "@anthropic-ai/claude-code" }
+    public var brewCask: String { "claude-code" }
 
     // Injizierbar für Tests — produktiv immer ~/.claude.json.
     private let claudeStateFile: URL
@@ -248,6 +259,7 @@ public struct ClaudeProvider: AccountProvider {
 public struct CodexProvider: AccountProvider {
     public let id = "codex"
     public var installURL: URL { URL(string: "https://developers.openai.com/codex/cli")! }
+    public var npmPackage: String { "@openai/codex" }
     public let displayName = "Codex CLI"
     public let sessionWindowLabel = "1h"
 

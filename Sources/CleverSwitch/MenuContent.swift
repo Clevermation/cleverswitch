@@ -20,6 +20,22 @@ struct MenuContent: View {
             Divider()
         }
 
+        // CLI-Updates (claude/codex): Befehl passend zur Install-Variante (native/npm/bun/brew).
+        ForEach(model.providers, id: \.id) { provider in
+            if let status = model.cliStatus[provider.id], status.updateAvailable,
+                let latest = status.latestVersion
+            {
+                Button {
+                    model.updateCLI(for: provider)
+                } label: {
+                    Label(
+                        "\(provider.displayName) CLI: \(L10n.t("update_available", latest))",
+                        systemImage: "terminal")
+                }
+                .disabled(model.cliUpdateInProgress.contains(provider.id))
+            }
+        }
+
         ForEach(model.providers, id: \.id) { provider in
             Section(provider.displayName) {
                 accountRows(for: provider)
@@ -145,7 +161,22 @@ struct MenuContent: View {
     /// `accountRows`), damit Abo · Session · Woche über alle Accounts hinweg untereinander stehen.
     /// Die Prozent-Zahl ist je nach Auslastung eingefärbt (grün < 60 %, orange < 85 %, rot darüber).
     private func usageLine(for account: Account, labelWidth: Int) -> Text {
-        func color(_ pct: Double) -> Color { pct >= 85 ? .red : (pct >= 60 ? .orange : .green) }
+        // Dynamische Ampel-Farben: die System-Grün/Orange-Töne sind im HELLEN Modus auf
+        // weißem Menü kaum lesbar (Theos Fund) — dort kräftig-dunkle Varianten, im dunklen
+        // Modus die leuchtenden Systemfarben.
+        func color(_ pct: Double) -> Color {
+            let dynamic = NSColor(name: nil) { appearance in
+                let dark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+                if pct >= 85 {
+                    return dark ? .systemRed : NSColor(red: 0.72, green: 0.05, blue: 0.10, alpha: 1)
+                }
+                if pct >= 60 {
+                    return dark ? .systemOrange : NSColor(red: 0.72, green: 0.38, blue: 0.0, alpha: 1)
+                }
+                return dark ? .systemGreen : NSColor(red: 0.0, green: 0.50, blue: 0.16, alpha: 1)
+            }
+            return Color(nsColor: dynamic)
+        }
         // Rechts-/linksbündig auf feste Zeichenbreite auffüllen (wirkt nur monospaced sauber).
         func pad(_ s: String, _ n: Int, right: Bool = false) -> String {
             let gap = String(repeating: " ", count: max(0, n - s.count))

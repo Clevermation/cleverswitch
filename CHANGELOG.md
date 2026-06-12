@@ -2,6 +2,12 @@
 
 Alle nennenswerten Änderungen an CleverSwitch.
 
+## [0.1.4] – 2026-06-12
+
+- **Light-Mode-Lesbarkeit** (Theos Fund): die farbigen Usage-Prozente nutzen jetzt dynamische Töne — kräftig-dunkles Grün/Orange/Rot im hellen Modus, leuchtende Systemfarben im dunklen.
+- **CLI-Updates eingebaut**: CleverSwitch erkennt, WIE `claude`/`codex` installiert wurden (nativer Installer, npm, bun oder Homebrew — Heuristik wie in den offiziellen Installern) und bietet bei einer neuen CLI-Version den passenden Ein-Klick-Update-Befehl an. Der falsche Befehl für die falsche Variante erzeugt sonst eine zweite, konkurrierende Installation. Neueste Versionen kommen aus der npm-Registry (alle Varianten synchron); Check läuft im 6-h-Fenster mit. Das Onboarding zeigt pro CLI jetzt Version + Variante (z.B. „v0.136.0 · bun").
+- **README**: neue „Update & uninstall"-Sektion (inkl. `--zap`), aktualisiertes Showcase mit farbigen Usage-Spalten, überarbeitete Texte.
+
 ## [0.1.3] – 2026-06-12
 
 - **KRITISCH: Token-Vermischung behoben** — nach einem Account-Neulogin konnten beide Accounts denselben Token (und damit identische Usage) zeigen. Ursache: die Keychain-Dedupe wählte nach spätestem Ablaufdatum statt nach dem neuesten Eintrag; ein frisch refreshter Token des anderen Accounts gewann dann fälschlich. Dreifach abgesichert: Dedupe behält den zuletzt angelegten Eintrag · Switch sichert den Live-Slot nur noch, wenn er laut Identität wirklich dem bisherigen Account gehört · spät eintreffende Token-Refreshes werden nach dem aktuellen (nicht dem alten) Aktiv-Zustand geroutet.

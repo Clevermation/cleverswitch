@@ -574,6 +574,7 @@ final class AppModel {
         }
         lastUpdateCheckAt = Date()
         let http = self.http
+        await refreshCLILatestVersions()  // CLI-Versionen im selben Rhythmus prüfen
         let found = await Task.detached {
             await UpdateChecker.check(current: cleverSwitchVersion, http: http)
         }.value
@@ -648,15 +649,93 @@ final class AppModel {
 
     /// Pro Anbieter: ist die CLI installiert? nil = noch nicht geprüft.
     private(set) var cliFound: [String: Bool] = [:]
+    /// Pro Anbieter: Pfad, Install-Variante (native/npm/bun/brew), Versionen.
+    private(set) var cliStatus: [String: CLIStatus] = [:]
+    /// Anbieter mit gerade laufendem CLI-Update.
+    private(set) var cliUpdateInProgress: Set<String> = []
 
-    /// Prüft (gecacht, einmal pro Poll) ob die Anbieter-CLIs auffindbar sind.
+    /// Prüft (gecacht, einmal pro Poll) ob die Anbieter-CLIs auffindbar sind — inkl.
+    /// Install-Variante und installierter Version.
     func detectCLIs() async {
         for provider in providers {
-            // Einmal gefunden = fertig (CLIs deinstallieren sich nicht von selbst) — sonst
+            // Einmal erkannt = fertig (CLIs deinstallieren sich nicht von selbst) — sonst
             // startet jeder Poll eine zsh-Login-Shell. Nur „fehlt noch" wird erneut geprüft.
-            guard cliFound[provider.id] != true else { continue }
-            let found = await Task.detached { provider.loginCommand() != nil }.value
-            cliFound[provider.id] = found
+            if cliFound[provider.id] == true, cliStatus[provider.id] != nil { continue }
+            let probed = await Task.detached { Self.probeCLI(provider: provider) }.value
+            cliFound[provider.id] = probed != nil
+            if var status = probed {
+                status.latestVersion = cliStatus[provider.id]?.latestVersion  // Latest behalten
+                cliStatus[provider.id] = status
+            }
+        }
+    }
+
+    /// Liest Pfad, Variante und Version einer CLI (blockierende Subprozesse -> detached rufen).
+    private nonisolated static func probeCLI(provider: AccountProvider) -> CLIStatus? {
+        guard let path = provider.loginCommand()?.first else { return nil }
+        let versionOutput = Subprocess.run(path, ["--version"]).stdout
+        let installed = CLIUpdateChecker.parseVersion(versionOutput)
+        let resolved = URL(fileURLWithPath: path).resolvingSymlinksInPath().path
+        // Erste Zeile fuer die Node-Shebang-Erkennung (npm/bun-Shims).
+        var firstLine: String?
+        if let handle = FileHandle(forReadingAtPath: resolved) {
+            if let data = try? handle.read(upToCount: 64) {
+                firstLine = String(data: data, encoding: .utf8)?
+                    .split(separator: "\n").first.map(String.init)
+            }
+            try? handle.close()
+        }
+        let variant = CLIUpdateChecker.detectVariant(
+            binaryPath: path, resolvedPath: resolved, firstLine: firstLine,
+            home: FileManager.default.homeDirectoryForCurrentUser.path)
+        return CLIStatus(binaryPath: path, variant: variant, installedVersion: installed)
+    }
+
+    /// Holt die neuesten CLI-Versionen aus der npm-Registry (läuft im 6-h-Update-Fenster mit).
+    private func refreshCLILatestVersions() async {
+        let http = self.http
+        for provider in providers {
+            guard var status = cliStatus[provider.id] else { continue }
+            let npmPackage = provider.npmPackage
+            guard !npmPackage.isEmpty else { continue }
+            let latest = await Task.detached {
+                await CLIUpdateChecker.latestVersion(npmPackage: npmPackage, http: http)
+            }.value
+            if let latest {
+                status.latestVersion = latest
+                cliStatus[provider.id] = status
+                if status.updateAvailable {
+                    Log.info(
+                        "cli-update verfügbar: \(provider.id) \(status.installedVersion ?? "?") -> \(latest)")
+                }
+            }
+        }
+    }
+
+    /// Führt das zur Install-Variante passende CLI-Update aus (zsh-Login-Shell, damit
+    /// npm/bun/brew im User-PATH gefunden werden) und erkennt die CLI danach neu.
+    func updateCLI(for provider: AccountProvider) {
+        guard let status = cliStatus[provider.id],
+            let command = CLIUpdateChecker.updateCommand(
+                variant: status.variant, cliName: provider.cliName,
+                npmPackage: provider.npmPackage, brewCask: provider.brewCask),
+            !cliUpdateInProgress.contains(provider.id)
+        else { return }
+        cliUpdateInProgress.insert(provider.id)
+        statusMessage = L10n.t("cli_updating")
+        Log.info("cli-update (\(provider.id), \(status.variant.rawValue)): \(command)")
+        Task {
+            let result = await Task.detached { Subprocess.run("/bin/zsh", ["-lc", command]) }.value
+            cliUpdateInProgress.remove(provider.id)
+            if result.status == 0 {
+                statusMessage = nil
+                cliStatus[provider.id] = nil  // neu erkennen (Version/Variante)
+                await detectCLIs()
+                await refreshCLILatestVersions()
+            } else {
+                statusMessage = L10n.t("update_failed")
+                Log.info("cli-update FEHLER (\(provider.id)): \(result.stderr.prefix(200))")
+            }
         }
     }
 
